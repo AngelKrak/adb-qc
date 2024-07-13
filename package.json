@@ -9,8 +9,12 @@
     "publish": "npm run publish",
     "start": "node src/index.js"
   },
-  "author": "Angel Ramirez <angel-krak@hotmail.com>",
-  "license": "ISC",
+  "author": {
+    "email": "angel-krak@hotmail.com",
+    "name": "Angel Ramirez",
+    "url": "https://github.com/AngelKrak"
+  },
+  "license": "MIT",
   "bin": {
     "adb-qc": "cli.js"
   },
@@ -20,6 +24,9 @@
     "node-dns-sd": "^1.0.1",
     "qrcode-terminal": "^0.12.0"
   },
+  "engines": {
+    "node": ">=14.0.0"
+  },
   "bugs": {
     "url": "https://github.com/AngelKrak/adb-qc/issues"
   },
@@ -27,6 +34,9 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AngelKrak/adb-qc.git"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
   },
   "keywords": [
     "adb",
@@ -36,6 +46,9 @@
     "wireless",
     "wifi",
     "adb-over-wifi",
+    "usb-debugging",
+    "mDNS",
+    "android-devices",
     "pairing",
     "qr-code",
     "pairing-code",
@@ -44,6 +57,10 @@
     "debugging",
     "device-discovery",
     "adb-connection",
-    "adb-pairing"
+    "adb-pairing",
+    "adb-wlan",
+    "wireless debugging",
+    "adb wireless",
+    "adb-wireless"
   ]
 }

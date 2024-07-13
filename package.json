@@ -6,7 +6,6 @@
   "preferGlobal": true,
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "publish": "npm run publish",
     "start": "node src/index.js"
   },
   "author": {

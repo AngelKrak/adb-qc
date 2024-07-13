@@ -4,6 +4,8 @@
 [![npm total downloads](https://img.shields.io/npm/dt/adb-qc.svg)](https://img.shields.io/npm/dt/adb-qc.svg)
 [![License](https://img.shields.io/npm/l/adb-qc.svg)](https://www.npmjs.com/package/adb-qc)
 
+![Portada](screens/screen.jpg)
+
 **ADB Quick Connect (adb-qc)** es una herramienta que simplifica la conexión y emparejamiento de dispositivos Android con ADB (Android Debug Bridge) a través de Wi-Fi. Permite realizar emparejamientos utilizando códigos QR o códigos de emparejamiento, y también conectar a dispositivos disponibles en la red.
 
 ## Características

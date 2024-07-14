@@ -59,23 +59,23 @@ Una vez instalado globalmente, puedes ejecutar la herramienta desde la línea de
 
 Ejecuta el comando `adb-qc --qr` para mostrar un código QR.
 
-![Código QR para Emparejamiento](https://vhs.charm.sh/vhs-1WFMsVw9YyHIk67XI8Stni.gif)
+![Código QR para Emparejamiento](https://vhs.charm.sh/vhs-4iiq5ybKctFNXgxDnXDeqd.gif)
 
 2.  **Emparejar Dispositivo con Código de Emparejamiento**:
 
 Ejecuta el comando `adb-qc --pair` para emparejar un dispositivo utilizando un código de emparejamiento.
 
-![Emparejamiento con Código](https://vhs.charm.sh/vhs-7DtxrVASpZxPdXtdnvotrz.gif)
+![Emparejamiento con Código](https://vhs.charm.sh/vhs-6FRxCcsYVjveqvYjEoWXdj.gif)
 
 1.  **Conectar a un Dispositivo**:
 
 Ejecuta el comando `adb-qc --connect` para conectar a un dispositivo disponible en la red.
 
-![Conectar a un Dispositivo](https://vhs.charm.sh/vhs-78haN7iKNzL0u4TytgIhuZ.gif)
+![Conectar a un Dispositivo](https://vhs.charm.sh/vhs-27uAI0Gg2wpaaP2TyI46y8.gif)
 
 1.  **Si no se proporcionan parámetros**, se te pedirá que selecciones una acción a través de un menú interactivo.
 
-![Menú Interactivo](https://vhs.charm.sh/vhs-2hMe40LjsvRAwoCly2bhyY.gif)
+![Menú Interactivo](https://vhs.charm.sh/vhs-5DpJ6W8kiegOobcDi2li3B.gif)
 
 ## Cómo Habilitar la Depuración Inalámbrica
 
@@ -89,7 +89,6 @@ Para utilizar **ADB Quick Connect**, necesitas habilitar la depuración inalámb
 2. **Activar la Depuración Inalámbrica**:
    - Regresa a **Configuración** y selecciona **Sistema**.
    - Toca **Avanzado** y luego **Opciones de desarrollador**.
-   - Activa **Depuración USB**.
    - Activa **Depuración inalámbrica** (puede que esté en una sección diferente dependiendo del fabricante).
 
 3. **Conectar a la Red Wi-Fi**:

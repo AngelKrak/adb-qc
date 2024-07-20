@@ -1,5 +1,20 @@
 const { spawn, exec } = require('child_process');
-const { input } = require('@inquirer/prompts');
+const { prompt } = require('enquirer');
+
+let adbProcess = null;  // Variable global para almacenar el proceso adb
+
+/**
+ * Handles process interruption (Ctrl + C) to cleanly exit.
+ */
+function handleProcessInterruption() {
+  process.on('SIGINT', () => {
+    console.log('Interrupt signal received: stopping processes...');
+    if (adbProcess) {
+      adbProcess.kill();  // Kill the adb process if it exists
+    }
+    process.exit();  // Exit the process
+  });
+}
 
 /**
  * Executes an adb command and handles the output.
@@ -8,7 +23,7 @@ const { input } = require('@inquirer/prompts');
  * @param {function(string):void} onError - Callback for handling errors.
  */
 function executeAdbCommand(commandArgs, onSuccess, onError) {
-  const adbProcess = spawn('adb', commandArgs);
+  adbProcess = spawn('adb', commandArgs);
 
   let stdout = '';
   let stderr = '';
@@ -35,14 +50,30 @@ function executeAdbCommand(commandArgs, onSuccess, onError) {
 }
 
 /**
+ * Prompts user for input using Enquirer.
+ * @param {string} question - The question to ask the user.
+ * @returns {Promise<string>} - The user's input.
+ */
+async function promptUser(question) {
+  const response = await prompt({
+    type: 'input',
+    name: 'code',
+    message: question,
+  });
+  return response.code;
+}
+
+/**
  * Initiates pairing with a device using adb pair command.
  * @param {Object} device - The device to pair with.
  * @param {string} password - The pairing password.
  * @returns {Promise<void>} A promise that resolves when pairing is complete.
  */
 async function pairDevice(device, password) {
+  handleProcessInterruption();
+
   return new Promise(function resolveRetry(resolve, reject) {
-    const adbProcess = spawn('adb', ['pair', `${device.address}:${device.port}`]);
+    adbProcess = spawn('adb', ['pair', `${device.address}:${device.port}`]);
 
     let pairingPrompted = false;
 
@@ -52,12 +83,11 @@ async function pairDevice(device, password) {
       if (output.includes('Enter pairing code:') && !pairingPrompted) {
         pairingPrompted = true;
         try {
-          const response = await input({
-            message: 'Enter pairing code:',
-          });
-          adbProcess.stdin.write(`${response}\n`);
+          const code = await promptUser('Enter pairing code: ');
+          adbProcess.stdin.write(`${code}\n`);
         } catch (error) {
-          reject(error);
+          adbProcess.stdin.pause();
+          process.exit();
         }
       }
     });
@@ -85,6 +115,8 @@ async function pairDevice(device, password) {
  * @returns {Promise<void>} A promise that resolves when connection is established.
  */
 async function connectToDevice(device) {
+  handleProcessInterruption();
+
   return new Promise((resolve, reject) => {
     executeAdbCommand(
       ['connect', `${device.address}:${device.port}`],
@@ -111,6 +143,8 @@ async function connectToDevice(device) {
  * @returns {Promise<void>} A promise that resolves when pairing is complete.
  */
 async function pairDeviceFromQR(device, password) {
+  handleProcessInterruption();
+
   return new Promise((resolve, reject) => {
     exec(`adb pair ${device.address}:${device.port} ${password}`, (error, stdout, stderr) => {
       if (error) {

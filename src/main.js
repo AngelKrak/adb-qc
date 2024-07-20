@@ -1,8 +1,8 @@
+const { Select } = require('enquirer');
 const { nanoid } = require('nanoid');
-const { showQR } = require('./utils/qrUtils');
 const { pairDevice, connectToDevice } = require('./utils/adbUtils');
 const { discoverDevices, startDiscoverQr } = require('./discovery/deviceDiscovery');
-const { select } = require('@inquirer/prompts');
+const { showQR } = require('./utils/qrUtils');
 
 const nameId = nanoid();
 const password = nanoid();
@@ -14,21 +14,21 @@ const args = process.argv.slice(2);
  * @returns {Promise<string>} The chosen action.
  */
 async function promptForAction() {
-  const choices = [
-    { name: '📱 Pair device with QR code', value: 'qr' },
-    { name: '🔑 Pair device with pairing code', value: 'pair' },
-    { name: '🔌 Connect to a device', value: 'connect' },
-  ];
-
-  const selectAction = await select({
+  const prompt = new Select({
+    name: 'action',
     message: '🚀 Please select an action to proceed:',
-    choices,
-    theme: {
-      prefix: ""
+    choices: [
+      { value: 'qr', name: '📱 Pair device with QR code' },
+      { value: 'pair', name: '🔑 Pair device with pairing code' },
+      { value: 'connect', name: '🔌 Connect to a device' },
+    ],
+    result(value) {
+      const selected = this.choices.find(choice => choice.name === value);
+      return selected ? selected.value : value;
     }
   });
 
-  return selectAction;
+  return await prompt.run();
 }
 
 /**

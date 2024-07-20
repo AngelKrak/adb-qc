@@ -1,5 +1,5 @@
 const mDnsSd = require('node-dns-sd');
-const { select } = require('@inquirer/prompts');
+const { Select } = require('enquirer');
 const { getDevice } = require('../utils/deviceUtils');
 const { pairDeviceFromQR } = require('../utils/adbUtils');
 
@@ -19,12 +19,17 @@ async function selectDevice(devices, isPairing) {
     ? 'Select device to pair:'
     : 'Select device to connect:';
 
-  const selectedDevice = await select({
+  const prompt = new Select({
+    name: 'device',
     message: promptMessage,
     choices: choices,
+    result(value) {
+      const selected = this.choices.find(choice => choice.name === value);
+      return selected ? selected.value : value;
+    }
   });
 
-  return selectedDevice;
+  return await prompt.run();
 }
 
 /**
@@ -50,12 +55,6 @@ async function discoverDevices(isPairing) {
   }
 }
 
-/**
- * Starts discovering devices for pairing with QR code.
- * @param {string} name - The device name for pairing.
- * @param {string} password - The pairing password.
- * @returns {Promise<void>}
- */
 /**
  * Starts discovering devices for pairing with QR code.
  * @param {string} name - The device name for pairing.

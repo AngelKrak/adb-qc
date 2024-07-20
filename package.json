@@ -1,6 +1,6 @@
 {
   "name": "adb-qc",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Quickly set up a wireless ADB connection for Android devices. Supports connection via pairing code or QR code, enabling remote debugging over Wi-Fi.",
   "main": "src/index.js",
   "preferGlobal": true,
@@ -18,13 +18,13 @@
     "adb-qc": "cli.js"
   },
   "dependencies": {
-    "@inquirer/prompts": "^5.1.2",
+    "enquirer": "^2.4.1",
     "nanoid": "^3.3.1",
     "node-dns-sd": "^1.0.1",
     "qrcode-terminal": "^0.12.0"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=14"
   },
   "bugs": {
     "url": "https://github.com/AngelKrak/adb-qc/issues"

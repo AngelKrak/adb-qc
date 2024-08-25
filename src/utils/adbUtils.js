@@ -66,10 +66,9 @@ async function promptUser(question) {
 /**
  * Initiates pairing with a device using adb pair command.
  * @param {Object} device - The device to pair with.
- * @param {string} password - The pairing password.
  * @returns {Promise<void>} A promise that resolves when pairing is complete.
  */
-async function pairDevice(device, password) {
+async function pairDevice(device) {
   handleProcessInterruption();
 
   return new Promise(function resolveRetry(resolve, reject) {

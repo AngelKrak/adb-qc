@@ -49,7 +49,11 @@ Una vez instalado globalmente, puedes ejecutar la herramienta desde la línea de
 
 -  `--qr` o `-q`: Muestra un código QR para el emparejamiento.
 
+-  `--qr_connect` o `-qc`: Muestra un código QR para el emparejamiento y se conecta automáticamente al dispositivo sin necesidad de usar posteriormente --connect.
+
 -  `--pair` o `-p`: Empareja un dispositivo utilizando un código de emparejamiento.
+
+-  `--pair_connect` o `-pc`: Empareja un dispositivo utilizando un código de emparejamiento y se conecta automáticamente al dispositivo sin necesidad de usar posteriormente --connect.
 
 -  `--connect` o `-c`: Conecta a un dispositivo disponible en la red.
 

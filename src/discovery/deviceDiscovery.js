@@ -1,15 +1,23 @@
 const mDnsSd = require('node-dns-sd');
 const { Select } = require('enquirer');
 const { getDevice } = require('../utils/deviceUtils');
-const { pairDeviceFromQR } = require('../utils/adbUtils');
+const { pairDeviceFromQR, pairDevice, connectToDevice } = require('../utils/adbUtils');
+
+let pairedDevice = null;
 
 /**
  * Lists discovered devices and prompts user to select one.
  * @param {Array<Object>} devices - Array of discovered devices.
  * @param {boolean} isPairing - Indicates if the action is pairing or connecting.
+ * @param {boolean} autoSelect - Automatically select the device if true.
  * @returns {Promise<Object>} A promise that resolves to the selected device.
  */
-async function selectDevice(devices, isPairing) {
+async function selectDevice(devices, isPairing, autoSelect = false) {
+  if (autoSelect && devices.length > 0) {
+    // Automatically select the first device if autoSelect is true
+    return devices[0];
+  }
+
   const choices = devices.map((device, index) => ({
     name: `${device.address}:${device.port}`,
     value: device
@@ -35,9 +43,10 @@ async function selectDevice(devices, isPairing) {
 /**
  * Starts discovering devices using mDnsSd based on whether the action is pairing or connecting.
  * @param {boolean} isPairing - Indicates if the action is pairing or connecting.
- * @returns {Promise<Object>} A promise that resolves to the selected device.
+ * @param {boolean} autoSelect - Automatically select the device if true.
+ * @returns {Promise<Object|null>} A promise that resolves to the selected device or null if none selected.
  */
-async function discoverDevices(isPairing) {
+async function discoverDevices(isPairing, autoSelect = false) {
   const serviceName = isPairing
     ? '_adb-tls-pairing._tcp.local'
     : '_adb-tls-connect._tcp.local';
@@ -48,7 +57,17 @@ async function discoverDevices(isPairing) {
       console.log('No devices found.');
       return null;
     }
-    return await selectDevice(deviceList.map(getDevice), isPairing);
+
+    if (autoSelect && pairedDevice) {
+      // Automatically select the previously paired device if available
+      const device = deviceList.map(getDevice).find(device => device.address === pairedDevice.address && device.port !== pairedDevice.port);
+      if (device) {
+        return device;
+      }
+    }
+
+    const device = await selectDevice(deviceList.map(getDevice), isPairing, autoSelect);
+    return device;
   } catch (error) {
     console.error('Error discovering devices:', error);
     throw error;
@@ -59,11 +78,13 @@ async function discoverDevices(isPairing) {
  * Starts discovering devices for pairing with QR code.
  * @param {string} name - The device name for pairing.
  * @param {string} password - The pairing password.
- * @param {number} maxRetries - Maximum number of retries for discovery.
- * @param {number} retryDelay - Delay between retries in milliseconds.
- * @returns {Promise<void>}
+ * @param {Object} options - Configuration options for discovery.
+ * @param {number} options.maxRetries - Maximum number of retries for discovery.
+ * @param {number} options.retryDelay - Delay between retries in milliseconds.
+ * @param {boolean} options.autoConnect - Automatically connect the device if true.
+ * @returns {Promise<Object|null>} A promise that resolves to the paired device or null if none found.
  */
-async function startDiscoverQr(name, password, maxRetries = 30, retryDelay = 1000) {
+async function startDiscoverQr(name, password, { maxRetries = 30, retryDelay = 1000, autoConnect = false } = {}) {
   try {
     let retryCount = 0;
     let deviceList = [];
@@ -79,7 +100,9 @@ async function startDiscoverQr(name, password, maxRetries = 30, retryDelay = 100
         if (device) {
           console.log(`Pairing your device: ${device.address}:${device.port}`);
           await pairDeviceFromQR(device, password);
-          return;
+          pairedDevice = device;
+          if (autoConnect) await connectToPreviouslyPairedDevice();
+          return device;
         } else {
           console.log(`Device '${name}' not found in this discovery cycle.`);
         }
@@ -90,9 +113,57 @@ async function startDiscoverQr(name, password, maxRetries = 30, retryDelay = 100
     }
 
     console.log(`Failed to discover device '${name}' after ${maxRetries} retries.`);
+    return null;
   } catch (error) {
     console.error('Error discovering devices for QR pairing:', error);
+    throw error;
   }
 }
 
-module.exports = { discoverDevices, startDiscoverQr };
+/**
+ * Starts discovering devices for pairing and connecting using a pairing code.
+ * @returns {Promise<void>}
+ */
+async function startPairAndConnect() {
+  try {
+    const device = await discoverDevices(true);
+    if (device) {
+      console.log(`Pairing your device: ${device.address}:${device.port}`);
+      await pairDevice(device);
+
+      pairedDevice = device;
+      await connectToPreviouslyPairedDevice();
+    }
+  } catch (error) {
+    console.error('Error pairing and connecting:', error);
+    throw error;
+  }
+}
+
+/**
+ * Connects to a previously paired device.
+ * @returns {Promise<void>}
+ */
+async function connectToPreviouslyPairedDevice() {
+  if (pairedDevice) {
+    console.log(`Searching for device to connect to using address: ${pairedDevice.address}`);
+
+    try {
+      const deviceToConnect = await discoverDevices(false, true);
+
+      if (deviceToConnect) {
+        console.log(`Connecting to device: ${deviceToConnect.address}:${deviceToConnect.port}`);
+        await connectToDevice(deviceToConnect);
+      } else {
+        console.error('Device not found for connection.');
+      }
+    } catch (error) {
+      console.error('Error connecting to previously paired device:', error);
+      throw error;
+    }
+  } else {
+    console.error('No paired device found.');
+  }
+}
+
+module.exports = { discoverDevices, startDiscoverQr, startPairAndConnect, connectToPreviouslyPairedDevice };

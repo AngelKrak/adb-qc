@@ -1,7 +1,7 @@
 const { Select } = require('enquirer');
 const { nanoid } = require('nanoid');
 const { pairDevice, connectToDevice } = require('./utils/adbUtils');
-const { discoverDevices, startDiscoverQr } = require('./discovery/deviceDiscovery');
+const { discoverDevices, startDiscoverQr, startPairAndConnect } = require('./discovery/deviceDiscovery');
 const { showQR } = require('./utils/qrUtils');
 
 const nameId = nanoid();
@@ -19,7 +19,9 @@ async function promptForAction() {
     message: '🚀 Please select an action to proceed:',
     choices: [
       { value: 'qr', name: '📱 Pair device with QR code' },
+      { value: 'qr_connect', name: '📱 Pair and connect device with QR code' },
       { value: 'pair', name: '🔑 Pair device with pairing code' },
+      { value: 'pair_connect', name: '🔑 Pair and connect device with pairing code' },
       { value: 'connect', name: '🔌 Connect to a device' },
     ],
     result(value) {
@@ -43,9 +45,9 @@ async function handleAction(action) {
       await startDiscoverQr(name, password);
       break;
     case 'pair':
-      const deviceToPair = await discoverDevices(true);
-      if (deviceToPair) {
-        await pairDevice(deviceToPair, password);
+      const device = await discoverDevices(true);
+      if (device) {
+        await pairDevice(device);
       }
       break;
     case 'connect':
@@ -53,6 +55,13 @@ async function handleAction(action) {
       if (deviceToConnect) {
         await connectToDevice(deviceToConnect);
       }
+      break;
+    case 'qr_connect':
+      showQR(name, password);
+      await startDiscoverQr(name, password, { autoConnect: true });
+      break;
+    case 'pair_connect':
+      await startPairAndConnect();
       break;
     default:
       console.error('⚠️ Unknown action:', action);
@@ -69,8 +78,12 @@ async function main() {
 
     if (args.includes('--qr') || args.includes('-q')) {
       action = 'qr';
+    } else if (args.includes('--qr_connect') || args.includes('-qc')) {
+      action = 'qr_connect';
     } else if (args.includes('--pair') || args.includes('-p')) {
       action = 'pair';
+    } else if (args.includes('--pair_connect') || args.includes('-pc')) {
+      action = 'pair_connect';
     } else if (args.includes('--connect') || args.includes('-c')) {
       action = 'connect';
     } else {

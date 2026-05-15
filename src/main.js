@@ -3,6 +3,7 @@ const { nanoid } = require('nanoid');
 const { pairDevice, connectToDevice } = require('./utils/adbUtils');
 const { discoverDevices, startDiscoverQr, startPairAndConnect } = require('./discovery/deviceDiscovery');
 const { showQR } = require('./utils/qrUtils');
+const { banner } = require('./utils/versionUtils');
 
 const nameId = nanoid();
 const password = nanoid();
@@ -73,6 +74,8 @@ async function handleAction(action) {
  * @returns {Promise<void>}
  */
 async function main() {
+  console.log(banner);
+  
   try {
     let action;
 
@@ -86,6 +89,8 @@ async function main() {
       action = 'pair_connect';
     } else if (args.includes('--connect') || args.includes('-c')) {
       action = 'connect';
+    } else if (["-v"].includes(args)) {
+      action = 'version';
     } else {
       action = await promptForAction();
     }

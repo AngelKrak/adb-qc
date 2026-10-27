@@ -1,7 +1,13 @@
 const mDnsSd = require('node-dns-sd');
 const { Select } = require('enquirer');
 const { getDevice } = require('../utils/deviceUtils');
-const { pairDeviceFromQR, pairDevice, connectToDevice } = require('../utils/adbUtils');
+const {
+  pairDeviceFromQR,
+  pairDevice,
+  connectToDevice,
+  getAdbConnectServices,
+  getConnectedSerials
+} = require('../utils/adbUtils');
 
 let pairedDevice = null;
 
@@ -141,21 +147,60 @@ async function startPairAndConnect() {
 }
 
 /**
+ * Looks for the connect service of the paired device, first through the adb server
+ * and then through our own mDNS discovery.
+ * @param {string} address - The IP address of the paired device.
+ * @returns {Promise<Object|null>} The device service or null if not found.
+ */
+async function findConnectService(address) {
+  const adbServices = await getAdbConnectServices();
+  const adbService = adbServices.find(service => service.address === address);
+  if (adbService) {
+    return adbService;
+  }
+
+  const deviceList = await mDnsSd.discover({ name: '_adb-tls-connect._tcp.local' });
+  return deviceList.map(getDevice).find(device => device.address === address && device.port) || null;
+}
+
+/**
  * Connects to a previously paired device.
+ * @param {Object} options - Configuration options for discovery.
+ * @param {number} options.maxRetries - Maximum number of retries for discovery.
+ * @param {number} options.retryDelay - Delay between retries in milliseconds.
  * @returns {Promise<void>}
  */
-async function connectToPreviouslyPairedDevice() {
+async function connectToPreviouslyPairedDevice({ maxRetries = 15, retryDelay = 1000 } = {}) {
   if (pairedDevice) {
     console.log(`Searching for device to connect to using address: ${pairedDevice.address}`);
 
     try {
-      const deviceToConnect = await discoverDevices(false, true);
+      let deviceToConnect = null;
 
-      if (deviceToConnect) {
+      for (let retryCount = 0; retryCount < maxRetries && !deviceToConnect; retryCount++) {
+        if (retryCount > 0) {
+          await new Promise(resolve => setTimeout(resolve, retryDelay)); // Wait before next retry
+        }
+        deviceToConnect = await findConnectService(pairedDevice.address);
+      }
+
+      if (!deviceToConnect) {
+        console.error('Device not found for connection.');
+        return;
+      }
+
+      // Recent adb versions connect paired devices automatically via mDNS.
+      const serials = await getConnectedSerials();
+      const alreadyConnected = serials.some(serial =>
+        serial === `${deviceToConnect.address}:${deviceToConnect.port}` ||
+        (deviceToConnect.deviceName && serial.startsWith(`${deviceToConnect.deviceName}.`))
+      );
+
+      if (alreadyConnected) {
+        console.log(`Connected to device: ${deviceToConnect.address}:${deviceToConnect.port}`);
+      } else {
         console.log(`Connecting to device: ${deviceToConnect.address}:${deviceToConnect.port}`);
         await connectToDevice(deviceToConnect);
-      } else {
-        console.error('Device not found for connection.');
       }
     } catch (error) {
       console.error('Error connecting to previously paired device:', error);

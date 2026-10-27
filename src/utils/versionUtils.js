@@ -1,5 +1,6 @@
 const { version } = require('../../package.json');
 const { runAdb } = require('./adbUtils');
+const { t } = require('../i18n');
 
 const banner = `
     ___     ____     ____           ____    ______
@@ -12,21 +13,6 @@ const banner = `
         Welcome to ADB Quick Connect
      Wi-Fi - QR Scanner - Pairing Code
 
-`;
-
-const help = `
-Usage: adb-qc [option]
-
-Options:
-  -q,  --qr             Pair a device with a QR code
-  -qc, --qr_connect     Pair and connect a device with a QR code
-  -p,  --pair           Pair a device with a pairing code
-  -pc, --pair_connect   Pair and connect a device with a pairing code
-  -c,  --connect        Connect to a paired device
-  -v,  --version        Show version info
-  -h,  --help           Show this help
-
-Without options, an interactive menu is shown.
 `;
 
 /**
@@ -52,7 +38,7 @@ OS:        ${process.platform}
  * Prints the command line help.
  */
 function showHelp() {
-  console.log(help);
+  console.log(t('help'));
 }
 
 module.exports = {

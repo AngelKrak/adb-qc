@@ -4,6 +4,7 @@ const { checkAdb, connectToDevice } = require('./utils/adbUtils');
 const { discoverDevices, pairDevice, startDiscoverQr, startPairAndConnect } = require('./discovery/deviceDiscovery');
 const { showQR } = require('./utils/qrUtils');
 const { banner, showVersion, showHelp } = require('./utils/versionUtils');
+const { t } = require('./i18n');
 
 /**
  * Command line flags for each action.
@@ -35,13 +36,13 @@ function parseAction(args) {
 async function promptForAction() {
   const prompt = new Select({
     name: 'action',
-    message: '🚀 Please select an action to proceed:',
+    message: t('menuTitle'),
     choices: [
-      { value: 'qr', name: '📱 Pair device with QR code' },
-      { value: 'qr_connect', name: '📱 Pair and connect device with QR code' },
-      { value: 'pair', name: '🔑 Pair device with pairing code' },
-      { value: 'pair_connect', name: '🔑 Pair and connect device with pairing code' },
-      { value: 'connect', name: '🔌 Connect to a device' },
+      { value: 'qr', name: t('menuQr') },
+      { value: 'qr_connect', name: t('menuQrConnect') },
+      { value: 'pair', name: t('menuPair') },
+      { value: 'pair_connect', name: t('menuPairConnect') },
+      { value: 'connect', name: t('menuConnect') },
     ],
     result(value) {
       const selected = this.choices.find(choice => choice.name === value);
@@ -85,7 +86,7 @@ async function handleAction(action) {
       break;
     }
     default:
-      throw new Error(`Unknown action: ${action}`);
+      throw new Error(t('unknownAction', { action }));
   }
 }
 
@@ -108,7 +109,7 @@ async function main(args = process.argv.slice(2)) {
   } catch (error) {
     // Enquirer rejects with an empty value when the user cancels a prompt (Ctrl + C).
     if (!error) {
-      console.log('Cancelled.');
+      console.log(t('cancelled'));
       process.exitCode = 130;
       return;
     }

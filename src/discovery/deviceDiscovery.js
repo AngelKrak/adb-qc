@@ -1,6 +1,7 @@
 const mDnsSd = require('node-dns-sd');
 const { Select, Input } = require('enquirer');
 const { getDevice } = require('../utils/deviceUtils');
+const { t } = require('../i18n');
 const {
   pair,
   connectToDevice,
@@ -76,7 +77,7 @@ async function selectDevice(devices, isPairing) {
 
   const prompt = new Select({
     name: 'device',
-    message: isPairing ? 'Select device to pair:' : 'Select device to connect:',
+    message: isPairing ? t('selectPair') : t('selectConnect'),
     choices: choices,
     result(value) {
       const selected = this.choices.find(choice => choice.name === value);
@@ -93,15 +94,13 @@ async function selectDevice(devices, isPairing) {
  * @returns {Promise<Object|null>} A promise that resolves to the selected device or null if none found.
  */
 async function discoverDevices(isPairing) {
-  console.log('Searching for devices...');
+  console.log(t('searching'));
 
   const serviceType = isPairing ? PAIRING_SERVICE : CONNECT_SERVICE;
   const devices = await waitForServices(serviceType, () => true, { maxRetries: 5 });
 
   if (devices.length === 0) {
-    console.log(isPairing
-      ? 'No devices found. Open "Pair device with pairing code" in Wireless debugging on your phone.'
-      : 'No devices found. Make sure Wireless debugging is enabled on your phone.');
+    console.log(isPairing ? t('noPairingDevices') : t('noConnectDevices'));
     return null;
   }
 
@@ -114,21 +113,21 @@ async function discoverDevices(isPairing) {
  * @returns {Promise<void>}
  */
 async function pairDevice(device) {
-  console.log(`Pairing your device: ${device.address}:${device.port}`);
+  console.log(t('pairing', { device: `${device.address}:${device.port}` }));
 
   for (let attempt = 1; ; attempt++) {
     const code = await new Input({
       name: 'code',
-      message: 'Enter pairing code:',
-      validate: value => /^\d{6}$/.test(value.trim()) || 'The pairing code has 6 digits.'
+      message: t('enterCode'),
+      validate: value => /^\d{6}$/.test(value.trim()) || t('invalidCode')
     }).run();
 
     try {
       await pair(device, code.trim());
-      console.log('Pairing successful!');
+      console.log(t('pairingSuccess'));
       return;
     } catch (error) {
-      console.error(`Pairing failed: ${error.message}`);
+      console.error(t('pairingFailed', { reason: error.message }));
       if (attempt >= MAX_PAIRING_ATTEMPTS) throw error;
     }
   }
@@ -145,8 +144,8 @@ async function pairDevice(device) {
  * @returns {Promise<Object|null>} A promise that resolves to the paired device or null if none found.
  */
 async function startDiscoverQr(name, password, { maxRetries = 60, retryDelay = 1000, autoConnect = false } = {}) {
-  console.log('Scan the QR code from "Wireless debugging > Pair device with QR code" on your phone.');
-  console.log('Waiting for your device...');
+  console.log(t('scanQr'));
+  console.log(t('waitingDevice'));
 
   const [device] = await waitForServices(
     PAIRING_SERVICE,
@@ -155,13 +154,13 @@ async function startDiscoverQr(name, password, { maxRetries = 60, retryDelay = 1
   );
 
   if (!device) {
-    console.log('No device scanned the QR code in time. Please try again.');
+    console.log(t('qrTimeout'));
     return null;
   }
 
-  console.log(`Pairing your device: ${device.address}:${device.port}`);
+  console.log(t('pairing', { device: `${device.address}:${device.port}` }));
   await pair(device, password);
-  console.log('Pairing successful!');
+  console.log(t('pairingSuccess'));
 
   if (autoConnect) await connectToPairedDevice(device);
   return device;
@@ -188,7 +187,7 @@ async function startPairAndConnect() {
  * @returns {Promise<void>}
  */
 async function connectToPairedDevice(pairedDevice, { maxRetries = 15, retryDelay = 1000 } = {}) {
-  console.log(`Searching for device to connect to using address: ${pairedDevice.address}`);
+  console.log(t('searchingConnect', { address: pairedDevice.address }));
 
   const [deviceToConnect] = await waitForServices(
     CONNECT_SERVICE,
@@ -197,7 +196,7 @@ async function connectToPairedDevice(pairedDevice, { maxRetries = 15, retryDelay
   );
 
   if (!deviceToConnect) {
-    console.error('Device not found for connection. Try again with: adb-qc --connect');
+    console.error(t('connectNotFound'));
     return;
   }
 
@@ -209,11 +208,11 @@ async function connectToPairedDevice(pairedDevice, { maxRetries = 15, retryDelay
   );
 
   if (alreadyConnected) {
-    console.log(`Connected to device: ${deviceToConnect.address}:${deviceToConnect.port}`);
+    console.log(t('connected', { device: `${deviceToConnect.address}:${deviceToConnect.port}` }));
     return;
   }
 
-  console.log(`Connecting to device: ${deviceToConnect.address}:${deviceToConnect.port}`);
+  console.log(t('connecting', { device: `${deviceToConnect.address}:${deviceToConnect.port}` }));
   await connectToDevice(deviceToConnect);
 }
 

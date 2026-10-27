@@ -1,7 +1,5 @@
 const { execFile } = require('child_process');
-
-const ADB_NOT_FOUND_MESSAGE =
-  'adb was not found. Install the Android SDK Platform-Tools and make sure adb is in your PATH.';
+const { t } = require('../i18n');
 
 /**
  * Minimum adb version with support for wireless pairing (adb pair).
@@ -18,7 +16,7 @@ function runAdb(args) {
     execFile('adb', args, (error, stdout, stderr) => {
       if (error) {
         const message = error.code === 'ENOENT'
-          ? ADB_NOT_FOUND_MESSAGE
+          ? t('adbNotFound')
           : (stderr || stdout || error.message).trim();
         reject(new Error(message));
         return;
@@ -47,10 +45,7 @@ async function checkAdb() {
   const major = parseAdbVersion(stdout);
 
   if (major !== null && major < MIN_ADB_MAJOR_VERSION) {
-    throw new Error(
-      `Your adb version (${major}) does not support wireless pairing. ` +
-      `Update the Android SDK Platform-Tools to version ${MIN_ADB_MAJOR_VERSION} or newer.`
-    );
+    throw new Error(t('adbTooOld', { major, min: MIN_ADB_MAJOR_VERSION }));
   }
 }
 
@@ -69,10 +64,7 @@ function isOutdatedServerError(message) {
  * @returns {Promise<void>}
  */
 async function restartAdbServer() {
-  console.warn(
-    '⚠️ The running adb server does not support pairing (it is probably an old adb, e.g. from Genymotion).\n' +
-    '   Restarting the adb server with the adb found in your PATH...'
-  );
+  console.warn(t('outdatedServer'));
   await runAdb(['kill-server']).catch(() => {});
   await runAdb(['start-server']);
 }
@@ -89,7 +81,7 @@ async function pair(device, code, serverRestarted = false) {
   try {
     const { stdout } = await runAdb(['pair', `${device.address}:${device.port}`, code]);
     if (!/successfully paired/i.test(stdout)) {
-      throw new Error(stdout.trim() || 'Unknown pairing error.');
+      throw new Error(stdout.trim() || t('unknownPairingError'));
     }
   } catch (error) {
     if (!serverRestarted && isOutdatedServerError(error.message)) {
@@ -110,9 +102,9 @@ async function connectToDevice(device) {
   const output = stdout.trim();
 
   if (!/^(already )?connected to/.test(output)) {
-    throw new Error(output || 'Unknown connection error.');
+    throw new Error(output || t('unknownConnectionError'));
   }
-  console.log(`Connected to device: ${device.address}:${device.port}`);
+  console.log(t('connected', { device: `${device.address}:${device.port}` }));
 }
 
 /**

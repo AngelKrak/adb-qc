@@ -1,41 +1,82 @@
 const mDnsSd = require('node-dns-sd');
-const { Select } = require('enquirer');
+const { Select, Input } = require('enquirer');
 const { getDevice } = require('../utils/deviceUtils');
 const {
-  pairDeviceFromQR,
-  pairDevice,
+  pair,
   connectToDevice,
-  getAdbConnectServices,
+  getAdbMdnsServices,
   getConnectedSerials
 } = require('../utils/adbUtils');
 
-let pairedDevice = null;
+const PAIRING_SERVICE = '_adb-tls-pairing._tcp';
+const CONNECT_SERVICE = '_adb-tls-connect._tcp';
+const MAX_PAIRING_ATTEMPTS = 3;
+
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Discovers services of the given type using both the adb server and our own mDNS query.
+ * @param {string} serviceType - The service type, e.g. '_adb-tls-connect._tcp'.
+ * @returns {Promise<Array<Object>>} The discovered devices, without duplicates.
+ */
+async function findServices(serviceType) {
+  const [adbServices, mdnsServices] = await Promise.all([
+    getAdbMdnsServices(serviceType),
+    mDnsSd.discover({ name: `${serviceType}.local` })
+      .then(list => list.map(service => getDevice(service, serviceType)))
+      .catch(() => [])
+  ]);
+
+  const devices = new Map();
+  [...adbServices, ...mdnsServices]
+    .filter(device => device.address && device.port)
+    .forEach(device => {
+      const key = `${device.address}:${device.port}`;
+      if (!devices.has(key)) devices.set(key, device);
+    });
+
+  return [...devices.values()];
+}
+
+/**
+ * Searches services repeatedly until the predicate matches or the retries run out.
+ * @param {string} serviceType - The service type to search.
+ * @param {function(Object):boolean} predicate - Filter for the wanted device.
+ * @param {Object} options - Configuration options for discovery.
+ * @param {number} options.maxRetries - Maximum number of retries for discovery.
+ * @param {number} options.retryDelay - Delay between retries in milliseconds.
+ * @returns {Promise<Array<Object>>} The matching devices (empty if none found).
+ */
+async function waitForServices(serviceType, predicate, { maxRetries, retryDelay = 1000 }) {
+  for (let retryCount = 0; retryCount < maxRetries; retryCount++) {
+    if (retryCount > 0) await wait(retryDelay);
+
+    const devices = (await findServices(serviceType)).filter(predicate);
+    if (devices.length > 0) return devices;
+  }
+  return [];
+}
 
 /**
  * Lists discovered devices and prompts user to select one.
  * @param {Array<Object>} devices - Array of discovered devices.
  * @param {boolean} isPairing - Indicates if the action is pairing or connecting.
- * @param {boolean} autoSelect - Automatically select the device if true.
  * @returns {Promise<Object>} A promise that resolves to the selected device.
  */
-async function selectDevice(devices, isPairing, autoSelect = false) {
-  if (autoSelect && devices.length > 0) {
-    // Automatically select the first device if autoSelect is true
+async function selectDevice(devices, isPairing) {
+  if (devices.length === 1) {
     return devices[0];
   }
 
-  const choices = devices.map((device, index) => ({
+  const choices = devices.map(device => ({
     name: `${device.address}:${device.port}`,
+    hint: device.deviceName ? `(${device.deviceName})` : '',
     value: device
   }));
 
-  const promptMessage = isPairing
-    ? 'Select device to pair:'
-    : 'Select device to connect:';
-
   const prompt = new Select({
     name: 'device',
-    message: promptMessage,
+    message: isPairing ? 'Select device to pair:' : 'Select device to connect:',
     choices: choices,
     result(value) {
       const selected = this.choices.find(choice => choice.name === value);
@@ -47,41 +88,54 @@ async function selectDevice(devices, isPairing, autoSelect = false) {
 }
 
 /**
- * Starts discovering devices using mDnsSd based on whether the action is pairing or connecting.
+ * Discovers devices for pairing or connecting and lets the user choose one.
  * @param {boolean} isPairing - Indicates if the action is pairing or connecting.
- * @param {boolean} autoSelect - Automatically select the device if true.
- * @returns {Promise<Object|null>} A promise that resolves to the selected device or null if none selected.
+ * @returns {Promise<Object|null>} A promise that resolves to the selected device or null if none found.
  */
-async function discoverDevices(isPairing, autoSelect = false) {
-  const serviceName = isPairing
-    ? '_adb-tls-pairing._tcp.local'
-    : '_adb-tls-connect._tcp.local';
+async function discoverDevices(isPairing) {
+  console.log('Searching for devices...');
 
-  try {
-    const deviceList = await mDnsSd.discover({ name: serviceName });
-    if (deviceList.length === 0) {
-      console.log('No devices found.');
-      return null;
+  const serviceType = isPairing ? PAIRING_SERVICE : CONNECT_SERVICE;
+  const devices = await waitForServices(serviceType, () => true, { maxRetries: 5 });
+
+  if (devices.length === 0) {
+    console.log(isPairing
+      ? 'No devices found. Open "Pair device with pairing code" in Wireless debugging on your phone.'
+      : 'No devices found. Make sure Wireless debugging is enabled on your phone.');
+    return null;
+  }
+
+  return selectDevice(devices, isPairing);
+}
+
+/**
+ * Pairs a device asking the user for the pairing code.
+ * @param {Object} device - The device to pair with.
+ * @returns {Promise<void>}
+ */
+async function pairDevice(device) {
+  console.log(`Pairing your device: ${device.address}:${device.port}`);
+
+  for (let attempt = 1; ; attempt++) {
+    const code = await new Input({
+      name: 'code',
+      message: 'Enter pairing code:',
+      validate: value => /^\d{6}$/.test(value.trim()) || 'The pairing code has 6 digits.'
+    }).run();
+
+    try {
+      await pair(device, code.trim());
+      console.log('Pairing successful!');
+      return;
+    } catch (error) {
+      console.error(`Pairing failed: ${error.message}`);
+      if (attempt >= MAX_PAIRING_ATTEMPTS) throw error;
     }
-
-    if (autoSelect && pairedDevice) {
-      // Automatically select the previously paired device if available
-      const device = deviceList.map(getDevice).find(device => device.address === pairedDevice.address && device.port !== pairedDevice.port);
-      if (device) {
-        return device;
-      }
-    }
-
-    const device = await selectDevice(deviceList.map(getDevice), isPairing, autoSelect);
-    return device;
-  } catch (error) {
-    console.error('Error discovering devices:', error);
-    throw error;
   }
 }
 
 /**
- * Starts discovering devices for pairing with QR code.
+ * Shows the QR code flow: waits for the device that scanned the QR code and pairs it.
  * @param {string} name - The device name for pairing.
  * @param {string} password - The pairing password.
  * @param {Object} options - Configuration options for discovery.
@@ -90,125 +144,83 @@ async function discoverDevices(isPairing, autoSelect = false) {
  * @param {boolean} options.autoConnect - Automatically connect the device if true.
  * @returns {Promise<Object|null>} A promise that resolves to the paired device or null if none found.
  */
-async function startDiscoverQr(name, password, { maxRetries = 30, retryDelay = 1000, autoConnect = false } = {}) {
-  try {
-    let retryCount = 0;
-    let deviceList = [];
+async function startDiscoverQr(name, password, { maxRetries = 60, retryDelay = 1000, autoConnect = false } = {}) {
+  console.log('Scan the QR code from "Wireless debugging > Pair device with QR code" on your phone.');
+  console.log('Waiting for your device...');
 
-    while (retryCount < maxRetries) {
-      deviceList = await mDnsSd.discover({
-        name: '_adb-tls-pairing._tcp.local'
-      });
+  const [device] = await waitForServices(
+    PAIRING_SERVICE,
+    service => service.deviceName === name,
+    { maxRetries, retryDelay }
+  );
 
-      if (deviceList.length > 0) {
-        const device = deviceList.map(getDevice).find(device => device.deviceName === name);
-
-        if (device) {
-          console.log(`Pairing your device: ${device.address}:${device.port}`);
-          await pairDeviceFromQR(device, password);
-          pairedDevice = device;
-          if (autoConnect) await connectToPreviouslyPairedDevice();
-          return device;
-        } else {
-          console.log(`Device '${name}' not found in this discovery cycle.`);
-        }
-      }
-
-      retryCount++;
-      await new Promise(resolve => setTimeout(resolve, retryDelay)); // Wait before next retry
-    }
-
-    console.log(`Failed to discover device '${name}' after ${maxRetries} retries.`);
+  if (!device) {
+    console.log('No device scanned the QR code in time. Please try again.');
     return null;
-  } catch (error) {
-    console.error('Error discovering devices for QR pairing:', error);
-    throw error;
   }
+
+  console.log(`Pairing your device: ${device.address}:${device.port}`);
+  await pair(device, password);
+  console.log('Pairing successful!');
+
+  if (autoConnect) await connectToPairedDevice(device);
+  return device;
 }
 
 /**
- * Starts discovering devices for pairing and connecting using a pairing code.
+ * Discovers a device with a pairing code, pairs it and connects to it.
  * @returns {Promise<void>}
  */
 async function startPairAndConnect() {
-  try {
-    const device = await discoverDevices(true);
-    if (device) {
-      console.log(`Pairing your device: ${device.address}:${device.port}`);
-      await pairDevice(device);
-
-      pairedDevice = device;
-      await connectToPreviouslyPairedDevice();
-    }
-  } catch (error) {
-    console.error('Error pairing and connecting:', error);
-    throw error;
+  const device = await discoverDevices(true);
+  if (device) {
+    await pairDevice(device);
+    await connectToPairedDevice(device);
   }
 }
 
 /**
- * Looks for the connect service of the paired device, first through the adb server
- * and then through our own mDNS discovery.
- * @param {string} address - The IP address of the paired device.
- * @returns {Promise<Object|null>} The device service or null if not found.
- */
-async function findConnectService(address) {
-  const adbServices = await getAdbConnectServices();
-  const adbService = adbServices.find(service => service.address === address);
-  if (adbService) {
-    return adbService;
-  }
-
-  const deviceList = await mDnsSd.discover({ name: '_adb-tls-connect._tcp.local' });
-  return deviceList.map(getDevice).find(device => device.address === address && device.port) || null;
-}
-
-/**
- * Connects to a previously paired device.
+ * Connects to a device that was just paired.
+ * @param {Object} pairedDevice - The paired device.
  * @param {Object} options - Configuration options for discovery.
  * @param {number} options.maxRetries - Maximum number of retries for discovery.
  * @param {number} options.retryDelay - Delay between retries in milliseconds.
  * @returns {Promise<void>}
  */
-async function connectToPreviouslyPairedDevice({ maxRetries = 15, retryDelay = 1000 } = {}) {
-  if (pairedDevice) {
-    console.log(`Searching for device to connect to using address: ${pairedDevice.address}`);
+async function connectToPairedDevice(pairedDevice, { maxRetries = 15, retryDelay = 1000 } = {}) {
+  console.log(`Searching for device to connect to using address: ${pairedDevice.address}`);
 
-    try {
-      let deviceToConnect = null;
+  const [deviceToConnect] = await waitForServices(
+    CONNECT_SERVICE,
+    service => service.address === pairedDevice.address,
+    { maxRetries, retryDelay }
+  );
 
-      for (let retryCount = 0; retryCount < maxRetries && !deviceToConnect; retryCount++) {
-        if (retryCount > 0) {
-          await new Promise(resolve => setTimeout(resolve, retryDelay)); // Wait before next retry
-        }
-        deviceToConnect = await findConnectService(pairedDevice.address);
-      }
-
-      if (!deviceToConnect) {
-        console.error('Device not found for connection.');
-        return;
-      }
-
-      // Recent adb versions connect paired devices automatically via mDNS.
-      const serials = await getConnectedSerials();
-      const alreadyConnected = serials.some(serial =>
-        serial === `${deviceToConnect.address}:${deviceToConnect.port}` ||
-        (deviceToConnect.deviceName && serial.startsWith(`${deviceToConnect.deviceName}.`))
-      );
-
-      if (alreadyConnected) {
-        console.log(`Connected to device: ${deviceToConnect.address}:${deviceToConnect.port}`);
-      } else {
-        console.log(`Connecting to device: ${deviceToConnect.address}:${deviceToConnect.port}`);
-        await connectToDevice(deviceToConnect);
-      }
-    } catch (error) {
-      console.error('Error connecting to previously paired device:', error);
-      throw error;
-    }
-  } else {
-    console.error('No paired device found.');
+  if (!deviceToConnect) {
+    console.error('Device not found for connection. Try again with: adb-qc --connect');
+    return;
   }
+
+  // Recent adb versions connect paired devices automatically via mDNS.
+  const serials = await getConnectedSerials();
+  const alreadyConnected = serials.some(serial =>
+    serial === `${deviceToConnect.address}:${deviceToConnect.port}` ||
+    (deviceToConnect.deviceName && serial.startsWith(`${deviceToConnect.deviceName}.`))
+  );
+
+  if (alreadyConnected) {
+    console.log(`Connected to device: ${deviceToConnect.address}:${deviceToConnect.port}`);
+    return;
+  }
+
+  console.log(`Connecting to device: ${deviceToConnect.address}:${deviceToConnect.port}`);
+  await connectToDevice(deviceToConnect);
 }
 
-module.exports = { discoverDevices, startDiscoverQr, startPairAndConnect, connectToPreviouslyPairedDevice };
+module.exports = {
+  discoverDevices,
+  pairDevice,
+  startDiscoverQr,
+  startPairAndConnect,
+  connectToPairedDevice
+};

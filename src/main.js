@@ -1,14 +1,32 @@
 const { Select } = require('enquirer');
 const { nanoid } = require('nanoid');
-const { pairDevice, connectToDevice } = require('./utils/adbUtils');
-const { discoverDevices, startDiscoverQr, startPairAndConnect } = require('./discovery/deviceDiscovery');
+const { checkAdb, connectToDevice } = require('./utils/adbUtils');
+const { discoverDevices, pairDevice, startDiscoverQr, startPairAndConnect } = require('./discovery/deviceDiscovery');
 const { showQR } = require('./utils/qrUtils');
-const { banner } = require('./utils/versionUtils');
+const { banner, showVersion, showHelp } = require('./utils/versionUtils');
 
-const nameId = nanoid();
-const password = nanoid();
-const name = `ADB_WIFI_${nameId}`;
-const args = process.argv.slice(2);
+/**
+ * Command line flags for each action.
+ */
+const ACTION_FLAGS = {
+  qr: ['--qr', '-q'],
+  qr_connect: ['--qr_connect', '-qc'],
+  pair: ['--pair', '-p'],
+  pair_connect: ['--pair_connect', '-pc'],
+  connect: ['--connect', '-c'],
+  version: ['--version', '-v'],
+  help: ['--help', '-h'],
+};
+
+/**
+ * Gets the action from the command line arguments.
+ * @param {string[]} args - The command line arguments.
+ * @returns {string|null} The action or null if no flag was given.
+ */
+function parseAction(args) {
+  const action = Object.keys(ACTION_FLAGS).find(key => ACTION_FLAGS[key].some(flag => args.includes(flag)));
+  return action || null;
+}
 
 /**
  * Displays a prompt to choose an action with clear instructions.
@@ -42,63 +60,62 @@ async function promptForAction() {
 async function handleAction(action) {
   switch (action) {
     case 'qr':
+    case 'qr_connect': {
+      const name = `ADB_WIFI_${nanoid()}`;
+      const password = nanoid();
       showQR(name, password);
-      await startDiscoverQr(name, password);
+      await startDiscoverQr(name, password, { autoConnect: action === 'qr_connect' });
       break;
-    case 'pair':
+    }
+    case 'pair': {
       const device = await discoverDevices(true);
       if (device) {
         await pairDevice(device);
       }
       break;
-    case 'connect':
-      const deviceToConnect = await discoverDevices(false);
-      if (deviceToConnect) {
-        await connectToDevice(deviceToConnect);
-      }
-      break;
-    case 'qr_connect':
-      showQR(name, password);
-      await startDiscoverQr(name, password, { autoConnect: true });
-      break;
+    }
     case 'pair_connect':
       await startPairAndConnect();
       break;
+    case 'connect': {
+      const device = await discoverDevices(false);
+      if (device) {
+        await connectToDevice(device);
+      }
+      break;
+    }
     default:
-      console.error('⚠️ Unknown action:', action);
+      throw new Error(`Unknown action: ${action}`);
   }
 }
 
 /**
  * Main function to start the device discovery and connection process.
+ * @param {string[]} args - The command line arguments.
  * @returns {Promise<void>}
  */
-async function main() {
+async function main(args = process.argv.slice(2)) {
+  const action = parseAction(args);
+
+  if (action === 'version') return showVersion();
+  if (action === 'help') return showHelp();
+
   console.log(banner);
-  
+
   try {
-    let action;
-
-    if (args.includes('--qr') || args.includes('-q')) {
-      action = 'qr';
-    } else if (args.includes('--qr_connect') || args.includes('-qc')) {
-      action = 'qr_connect';
-    } else if (args.includes('--pair') || args.includes('-p')) {
-      action = 'pair';
-    } else if (args.includes('--pair_connect') || args.includes('-pc')) {
-      action = 'pair_connect';
-    } else if (args.includes('--connect') || args.includes('-c')) {
-      action = 'connect';
-    } else if (["-v"].includes(args)) {
-      action = 'version';
-    } else {
-      action = await promptForAction();
-    }
-
-    await handleAction(action);
+    await checkAdb();
+    await handleAction(action || await promptForAction());
   } catch (error) {
-    console.error('❌ An error occurred:', error);
+    // Enquirer rejects with an empty value when the user cancels a prompt (Ctrl + C).
+    if (!error) {
+      console.log('Cancelled.');
+      process.exitCode = 130;
+      return;
+    }
+    console.error(`❌ ${error.message || error}`);
+    process.exitCode = 1;
   }
 }
 
 module.exports = main;
+module.exports.parseAction = parseAction;

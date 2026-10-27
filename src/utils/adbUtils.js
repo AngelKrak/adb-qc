@@ -1,164 +1,180 @@
-const { spawn, exec } = require('child_process');
-const { prompt } = require('enquirer');
-
-let adbProcess = null;  // Variable global para almacenar el proceso adb
+const { execFile } = require('child_process');
+const { t } = require('../i18n');
 
 /**
- * Handles process interruption (Ctrl + C) to cleanly exit.
+ * Minimum adb version with support for wireless pairing (adb pair).
  */
-function handleProcessInterruption() {
-  process.on('SIGINT', () => {
-    console.log('Interrupt signal received: stopping processes...');
-    if (adbProcess) {
-      adbProcess.kill();  // Kill the adb process if it exists
-    }
-    process.exit();  // Exit the process
+const MIN_ADB_MAJOR_VERSION = 30;
+
+/**
+ * Runs an adb command without a shell.
+ * @param {string[]} args - The command arguments for adb.
+ * @returns {Promise<{stdout: string, stderr: string}>}
+ */
+function runAdb(args) {
+  return new Promise((resolve, reject) => {
+    execFile('adb', args, (error, stdout, stderr) => {
+      if (error) {
+        const message = error.code === 'ENOENT'
+          ? t('adbNotFound')
+          : (stderr || stdout || error.message).trim();
+        reject(new Error(message));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
   });
 }
 
 /**
- * Executes an adb command and handles the output.
- * @param {string[]} commandArgs - The command arguments for adb.
- * @param {function(string):void} onSuccess - Callback for successful execution.
- * @param {function(string):void} onError - Callback for handling errors.
+ * Extracts the major version from the output of `adb version`.
+ * @param {string} output - The output of `adb version`.
+ * @returns {number|null} The major version or null if it can't be found.
  */
-function executeAdbCommand(commandArgs, onSuccess, onError) {
-  adbProcess = spawn('adb', commandArgs);
-
-  let stdout = '';
-  let stderr = '';
-
-  adbProcess.stdout.on('data', (data) => {
-    stdout += data.toString();
-  });
-
-  adbProcess.stderr.on('data', (data) => {
-    stderr += data.toString();
-  });
-
-  adbProcess.on('close', (code) => {
-    if (code === 0) {
-      onSuccess(stdout);
-    } else {
-      onError(stderr.trim());
-    }
-  });
-
-  adbProcess.on('error', (err) => {
-    onError(`Failed to spawn adb process: ${err.message}`);
-  });
+function parseAdbVersion(output) {
+  const match = /^Version (\d+)\./m.exec(output || '');
+  return match ? Number(match[1]) : null;
 }
 
 /**
- * Prompts user for input using Enquirer.
- * @param {string} question - The question to ask the user.
- * @returns {Promise<string>} - The user's input.
+ * Verifies that adb is installed and supports wireless pairing.
+ * @returns {Promise<void>}
  */
-async function promptUser(question) {
-  const response = await prompt({
-    type: 'input',
-    name: 'code',
-    message: question,
-  });
-  return response.code;
+async function checkAdb() {
+  const { stdout } = await runAdb(['version']);
+  const major = parseAdbVersion(stdout);
+
+  if (major !== null && major < MIN_ADB_MAJOR_VERSION) {
+    throw new Error(t('adbTooOld', { major, min: MIN_ADB_MAJOR_VERSION }));
+  }
 }
 
 /**
- * Initiates pairing with a device using adb pair command.
+ * Checks if an adb error comes from a server too old to support pairing
+ * (e.g. the adb bundled with Genymotion or another outdated SDK).
+ * @param {string} message - The error output from adb.
+ * @returns {boolean}
+ */
+function isOutdatedServerError(message) {
+  return /unknown host service/i.test(message || '');
+}
+
+/**
+ * Restarts the adb server so it is launched by the adb found in PATH.
+ * @returns {Promise<void>}
+ */
+async function restartAdbServer() {
+  console.warn(t('outdatedServer'));
+  await runAdb(['kill-server']).catch(() => {});
+  await runAdb(['start-server']);
+}
+
+/**
+ * Pairs a device using adb pair with the given pairing code.
+ * If the adb server is too old to support pairing, it is restarted once.
  * @param {Object} device - The device to pair with.
- * @returns {Promise<void>} A promise that resolves when pairing is complete.
+ * @param {string} code - The pairing code or QR password.
+ * @param {boolean} serverRestarted - Indicates if the adb server was already restarted.
+ * @returns {Promise<void>}
  */
-async function pairDevice(device) {
-  handleProcessInterruption();
-
-  return new Promise(function resolveRetry(resolve, reject) {
-    adbProcess = spawn('adb', ['pair', `${device.address}:${device.port}`]);
-
-    let pairingPrompted = false;
-
-    adbProcess.stdout.on('data', async (data) => {
-      const output = data.toString();
-
-      if (output.includes('Enter pairing code:') && !pairingPrompted) {
-        pairingPrompted = true;
-        try {
-          const code = await promptUser('Enter pairing code: ');
-          adbProcess.stdin.write(`${code}\n`);
-        } catch (error) {
-          adbProcess.stdin.pause();
-          process.exit();
-        }
-      }
-    });
-
-    adbProcess.on('close', (code) => {
-      if (code === 0) {
-        console.log('Pairing successful!');
-        resolve();
-      } else {
-        console.error('Pairing failed.');
-        resolveRetry(resolve, reject);
-      }
-    });
-
-    adbProcess.on('error', (err) => {
-      console.error(`Failed to start adb pair process: ${err.message}`);
-      resolveRetry(resolve, reject);
-    });
-  });
+async function pair(device, code, serverRestarted = false) {
+  try {
+    const { stdout } = await runAdb(['pair', `${device.address}:${device.port}`, code]);
+    if (!/successfully paired/i.test(stdout)) {
+      throw new Error(stdout.trim() || t('unknownPairingError'));
+    }
+  } catch (error) {
+    if (!serverRestarted && isOutdatedServerError(error.message)) {
+      await restartAdbServer();
+      return pair(device, code, true);
+    }
+    throw error;
+  }
 }
 
 /**
  * Connects to a device using adb connect command.
  * @param {Object} device - The device to connect to.
- * @returns {Promise<void>} A promise that resolves when connection is established.
+ * @returns {Promise<void>}
  */
 async function connectToDevice(device) {
-  handleProcessInterruption();
+  const { stdout } = await runAdb(['connect', `${device.address}:${device.port}`]);
+  const output = stdout.trim();
 
-  return new Promise((resolve, reject) => {
-    executeAdbCommand(
-      ['connect', `${device.address}:${device.port}`],
-      (stdout) => {
-        const output = stdout.trim();
-        if (output.startsWith('connected to')) {
-          console.log(`Connected to device: ${device.address}:${device.port}`);
-          resolve();
-        } else {
-          reject(new Error(output));
-        }
-      },
-      (error) => {
-        reject(new Error(error));
-      }
-    );
-  });
+  if (!/^(already )?connected to/.test(output)) {
+    throw new Error(output || t('unknownConnectionError'));
+  }
+  console.log(t('connected', { device: `${device.address}:${device.port}` }));
 }
 
 /**
- * Initiates pairing with a device using adb pair command based on QR code.
- * @param {Object} device - The device to pair with.
- * @param {string} password - The pairing password.
- * @returns {Promise<void>} A promise that resolves when pairing is complete.
+ * Parses the output of `adb mdns services`.
+ * @param {string} output - The output of `adb mdns services`.
+ * @returns {Array<{deviceName: string, serviceType: string, address: string, port: number}>}
  */
-async function pairDeviceFromQR(device, password) {
-  handleProcessInterruption();
-
-  return new Promise((resolve, reject) => {
-    exec(`adb pair ${device.address}:${device.port} ${password}`, (error, stdout, stderr) => {
-      if (error) {
-        console.error('Pairing failed:', error.message);
-        reject(error);
-        return;
-      }
-      if (stderr) {
-        reject(new Error(stderr));
-        return;
-      }
-      console.log('Pairing successful!');
-      resolve();
-    });
-  });
+function parseMdnsServices(output) {
+  return (output || '')
+    .split('\n')
+    .map(line => /^(.+?)\s+(_adb[\w-]*\._tcp)\.?\s+([\d.]+):(\d+)\s*$/.exec(line.trim()))
+    .filter(Boolean)
+    .map(([, deviceName, serviceType, address, port]) => ({
+      deviceName,
+      serviceType,
+      address,
+      port: Number(port)
+    }));
 }
 
-module.exports = { executeAdbCommand, pairDevice, connectToDevice, pairDeviceFromQR };
+/**
+ * Lists the services of the given type discovered by the adb server itself.
+ * @param {string} serviceType - The service type, e.g. '_adb-tls-connect._tcp'.
+ * @returns {Promise<Array<{deviceName: string, serviceType: string, address: string, port: number}>>}
+ */
+async function getAdbMdnsServices(serviceType) {
+  try {
+    const { stdout } = await runAdb(['mdns', 'services']);
+    return parseMdnsServices(stdout).filter(service => service.serviceType === serviceType);
+  } catch (error) {
+    return [];
+  }
+}
+
+/**
+ * Parses the output of `adb devices` and returns the serials of the online devices.
+ * @param {string} output - The output of `adb devices`.
+ * @returns {string[]}
+ */
+function parseConnectedSerials(output) {
+  return (output || '')
+    .split('\n')
+    .slice(1)
+    .map(line => line.trim().split(/\s+/))
+    .filter(parts => parts[1] === 'device')
+    .map(parts => parts[0]);
+}
+
+/**
+ * Returns the serials of the devices currently connected to adb.
+ * @returns {Promise<string[]>}
+ */
+async function getConnectedSerials() {
+  try {
+    const { stdout } = await runAdb(['devices']);
+    return parseConnectedSerials(stdout);
+  } catch (error) {
+    return [];
+  }
+}
+
+module.exports = {
+  runAdb,
+  checkAdb,
+  parseAdbVersion,
+  isOutdatedServerError,
+  pair,
+  connectToDevice,
+  parseMdnsServices,
+  getAdbMdnsServices,
+  parseConnectedSerials,
+  getConnectedSerials
+};

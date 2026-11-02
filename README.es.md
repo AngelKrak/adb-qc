@@ -157,7 +157,7 @@ El servidor de adb que está corriendo es una versión antigua que no soporta em
 
 Las versiones recientes de adb conectan automáticamente los dispositivos emparejados. Revisa con `adb devices` si ya aparece; si no, ejecuta `adb-qc --connect`.
 
-Algunos teléfonos (por ejemplo el **OnePlus 13**) no anuncian su puerto de conexión en la red después de emparejar, así que no se pueden encontrar automáticamente. En ese caso adb-qc te pide la **Dirección IP y puerto** que aparece en la pantalla de Depuración inalámbrica del teléfono.
+Algunos teléfonos (por ejemplo el **OnePlus 13**) no anuncian su puerto de conexión en la red después de emparejar, así que no se pueden encontrar automáticamente. En ese caso adb-qc encuentra el puerto revisando los puertos de la IP del teléfono (unos segundos) y lo recuerda, para que el siguiente `adb-qc --connect` sea instantáneo. Si aun así no lo encuentra, te pide la **Dirección IP y puerto** que aparece en la pantalla de Depuración inalámbrica del teléfono.
 
 ## Desarrollo
 

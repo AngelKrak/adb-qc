@@ -9,7 +9,12 @@ const MAX_PAYLOAD = 256 * 1024;
 /**
  * Range used by Android for the Wireless debugging port (Linux ephemeral ports).
  */
-const DEFAULT_PORT_RANGE = { from: 30000, to: 65535 };
+const DEFAULT_PORT_RANGE = { from: 32768, to: 60999 };
+
+/**
+ * Errors caused by too many open sockets: the port must be tried again, it is not closed.
+ */
+const RETRYABLE_ERRORS = new Set(['EMFILE', 'ENFILE', 'ENOBUFS', 'EADDRNOTAVAIL']);
 
 /**
  * Builds an adb CNXN packet, the first message an adb host sends to a device.
@@ -40,25 +45,26 @@ function isAdbResponse(data) {
 }
 
 /**
- * Tries to open a TCP connection and resolves with the connected socket or null.
+ * Tries to open a TCP connection.
  * @param {string} host - The IP address.
  * @param {number} port - The port.
  * @param {number} timeout - Timeout in milliseconds.
- * @returns {Promise<net.Socket|null>}
+ * @returns {Promise<{socket: net.Socket|null, retry: boolean}>} The connected socket, or null
+ *   and whether the port must be tried again (e.g. too many open files).
  */
 function openSocket(host, port, timeout) {
   return new Promise(resolve => {
     const socket = net.connect({ host, port });
-    const fail = () => {
+    const fail = error => {
       socket.destroy();
-      resolve(null);
+      resolve({ socket: null, retry: RETRYABLE_ERRORS.has(error?.code) });
     };
-    socket.setTimeout(timeout, fail);
+    socket.setTimeout(timeout, () => fail());
     socket.once('error', fail);
     socket.once('connect', () => {
       socket.setTimeout(0);
       socket.removeListener('error', fail);
-      resolve(socket);
+      resolve({ socket, retry: false });
     });
   });
 }
@@ -67,18 +73,23 @@ function openSocket(host, port, timeout) {
  * Finds the open TCP ports of a host in the given range.
  * @param {string} host - The IP address.
  * @param {Object} options - Scan options.
+ * @param {AbortSignal} options.signal - Stops the scan when aborted.
  * @returns {Promise<number[]>} The open ports.
  */
-async function scanOpenPorts(host, { from = DEFAULT_PORT_RANGE.from, to = DEFAULT_PORT_RANGE.to, concurrency = 256, timeout = 400 } = {}) {
+async function scanOpenPorts(host, { from = DEFAULT_PORT_RANGE.from, to = DEFAULT_PORT_RANGE.to, concurrency = 150, timeout = 400, signal } = {}) {
   const openPorts = [];
   let nextPort = from;
 
   const worker = async () => {
-    while (nextPort <= to) {
+    while (nextPort <= to && !signal?.aborted) {
       const port = nextPort++;
-      const socket = await openSocket(host, port, timeout);
-      if (socket) {
-        socket.destroy();
+      let result = await openSocket(host, port, timeout);
+      while (result.retry && !signal?.aborted) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        result = await openSocket(host, port, timeout);
+      }
+      if (result.socket) {
+        result.socket.destroy();
         openPorts.push(port);
       }
     }
@@ -96,7 +107,7 @@ async function scanOpenPorts(host, { from = DEFAULT_PORT_RANGE.from, to = DEFAUL
  * @returns {Promise<boolean>}
  */
 async function isAdbPort(host, port, timeout = 1500) {
-  const socket = await openSocket(host, port, timeout);
+  const { socket } = await openSocket(host, port, timeout);
   if (!socket) return false;
 
   return new Promise(resolve => {
@@ -115,10 +126,19 @@ async function isAdbPort(host, port, timeout = 1500) {
 /**
  * Finds the Wireless debugging port of a device by scanning its ports.
  * @param {string} host - The IP address of the device.
+ * @param {Object} options - Search options.
+ * @param {number} options.preferredPort - Port checked first (e.g. the last used one), since
+ *   it usually stays the same until Wireless debugging is turned off.
+ * @param {AbortSignal} options.signal - Stops the search when aborted.
  * @returns {Promise<number|null>} The adb port or null if not found.
  */
-async function findAdbPort(host) {
-  const openPorts = await scanOpenPorts(host);
+async function findAdbPort(host, { preferredPort, signal } = {}) {
+  if (preferredPort && await isAdbPort(host, preferredPort)) return preferredPort;
+  if (signal?.aborted) return null;
+
+  const openPorts = await scanOpenPorts(host, { signal });
+  if (signal?.aborted) return null;
+
   const results = await Promise.all(openPorts.map(port => isAdbPort(host, port)));
   const index = results.indexOf(true);
   return index === -1 ? null : openPorts[index];

@@ -30,19 +30,20 @@ function writeConfig(config) {
 }
 
 /**
- * Returns the IP address of the last connected device.
- * @returns {string|null}
+ * Returns the last connected device.
+ * @returns {{address: string, port: number|null}|null}
  */
-function getLastAddress() {
-  return readConfig().lastAddress || null;
+function getLastDevice() {
+  const { lastAddress, lastPort } = readConfig();
+  return lastAddress ? { address: lastAddress, port: lastPort || null } : null;
 }
 
 /**
- * Saves the IP address of the last connected device.
- * @param {string} address - The IP address.
+ * Saves the last connected device.
+ * @param {{address: string, port: number}} device - The device.
  */
-function saveLastAddress(address) {
-  writeConfig({ ...readConfig(), lastAddress: address });
+function saveLastDevice({ address, port }) {
+  writeConfig({ ...readConfig(), lastAddress: address, lastPort: port });
 }
 
-module.exports = { getLastAddress, saveLastAddress };
+module.exports = { getLastDevice, saveLastDevice };

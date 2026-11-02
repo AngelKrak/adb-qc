@@ -3,7 +3,7 @@ const { Select, Input } = require('enquirer');
 const { getDevice, parsePort, parseHostPort } = require('../utils/deviceUtils');
 const { t } = require('../i18n');
 const { findAdbPort } = require('../utils/portScanner');
-const { getLastAddress, saveLastAddress } = require('../utils/configStore');
+const { getLastDevice, saveLastDevice } = require('../utils/configStore');
 const {
   pair,
   connectToDevice,
@@ -16,6 +16,38 @@ const CONNECT_SERVICE = '_adb-tls-connect._tcp';
 const MAX_PAIRING_ATTEMPTS = 3;
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Resolves with the first non-empty result of the given searches, or null when all of them fail.
+ * @param {Array<Promise<*>>} searches - The searches running in parallel.
+ * @returns {Promise<*>}
+ */
+function firstFound(searches) {
+  return new Promise(resolve => {
+    let pending = searches.length;
+    searches.forEach(search => search
+      .catch(() => null)
+      .then(result => {
+        pending--;
+        if (result) resolve(result);
+        else if (pending === 0) resolve(null);
+      }));
+  });
+}
+
+/**
+ * Searches the Wireless debugging port of a device: first the last used port, then a port scan.
+ * Some phones (e.g. OnePlus 13) never announce the connect service over mDNS.
+ * @param {string} address - The IP address of the device.
+ * @param {AbortSignal} signal - Stops the search when aborted.
+ * @returns {Promise<Object|null>} The device to connect to, or null if not found.
+ */
+async function scanForDevice(address, signal) {
+  const lastDevice = getLastDevice();
+  const preferredPort = lastDevice?.address === address ? lastDevice.port : null;
+  const port = await findAdbPort(address, { preferredPort, signal });
+  return port ? { address, port } : null;
+}
 
 /**
  * Discovers services of the given type using both the adb server and our own mDNS query.
@@ -48,10 +80,11 @@ async function findServices(serviceType) {
  * @param {Object} options - Configuration options for discovery.
  * @param {number} options.maxRetries - Maximum number of retries for discovery.
  * @param {number} options.retryDelay - Delay between retries in milliseconds.
+ * @param {AbortSignal} options.signal - Stops the search when aborted.
  * @returns {Promise<Array<Object>>} The matching devices (empty if none found).
  */
-async function waitForServices(serviceType, predicate, { maxRetries, retryDelay = 1000 }) {
-  for (let retryCount = 0; retryCount < maxRetries; retryCount++) {
+async function waitForServices(serviceType, predicate, { maxRetries, retryDelay = 1000, signal }) {
+  for (let retryCount = 0; retryCount < maxRetries && !signal?.aborted; retryCount++) {
     if (retryCount > 0) await wait(retryDelay);
 
     const devices = (await findServices(serviceType)).filter(predicate);
@@ -98,18 +131,30 @@ async function selectDevice(devices, isPairing) {
 async function discoverDevices(isPairing) {
   console.log(t('searching'));
 
-  const serviceType = isPairing ? PAIRING_SERVICE : CONNECT_SERVICE;
-  const devices = await waitForServices(serviceType, () => true, { maxRetries: 5 });
-
-  if (devices.length === 0) {
-    if (!isPairing) {
-      return findDeviceWithoutDiscovery();
+  if (isPairing) {
+    const devices = await waitForServices(PAIRING_SERVICE, () => true, { maxRetries: 5 });
+    if (devices.length === 0) {
+      console.log(t('noPairingDevices'));
+      return null;
     }
-    console.log(t('noPairingDevices'));
-    return null;
+    return selectDevice(devices, isPairing);
   }
 
-  return selectDevice(devices, isPairing);
+  // Search with mDNS and, in parallel, scan the last used address.
+  const lastAddress = getLastDevice()?.address || null;
+  const controller = new AbortController();
+  const searches = [
+    waitForServices(CONNECT_SERVICE, () => true, { maxRetries: 5, signal: controller.signal })
+      .then(devices => (devices.length > 0 ? devices : null))
+  ];
+  if (lastAddress) {
+    searches.push(scanForDevice(lastAddress, controller.signal).then(device => (device ? [device] : null)));
+  }
+
+  const devices = await firstFound(searches);
+  controller.abort();
+
+  return devices ? selectDevice(devices, isPairing) : askForDeviceAddress(lastAddress);
 }
 
 /**
@@ -184,29 +229,11 @@ async function startPairAndConnect() {
 }
 
 /**
- * Finds the Wireless debugging port of a device by scanning its ports.
- * Some phones (e.g. OnePlus 13) never announce the connect service over mDNS.
- * @param {string} address - The IP address of the device.
+ * Asks the user for "IP" or "IP:port" when no device can be found automatically.
+ * @param {string|null} lastAddress - The last used address, shown as the default value.
  * @returns {Promise<Object|null>} The device to connect to, or null if not found.
  */
-async function findDeviceByPortScan(address) {
-  console.log(t('scanningPorts', { address }));
-  const port = await findAdbPort(address);
-  return port ? { address, port } : null;
-}
-
-/**
- * Finds a device to connect to when mDNS discovery finds nothing:
- * scans the last used address and, if needed, asks the user for "IP" or "IP:port".
- * @returns {Promise<Object|null>} The device to connect to, or null if not found.
- */
-async function findDeviceWithoutDiscovery() {
-  const lastAddress = getLastAddress();
-  if (lastAddress) {
-    const device = await findDeviceByPortScan(lastAddress);
-    if (device) return device;
-  }
-
+async function askForDeviceAddress(lastAddress) {
   if (!process.stdin.isTTY) {
     console.log(t('noConnectDevices'));
     return null;
@@ -223,7 +250,8 @@ async function findDeviceWithoutDiscovery() {
   const target = parseHostPort(value);
   if (target.port) return target;
 
-  const device = await findDeviceByPortScan(target.address);
+  console.log(t('scanningPorts', { address: target.address }));
+  const device = await scanForDevice(target.address);
   if (!device) console.error(t('connectNotFound'));
   return device;
 }
@@ -236,7 +264,7 @@ async function findDeviceWithoutDiscovery() {
 async function connectAndRemember(device) {
   console.log(t('connecting', { device: `${device.address}:${device.port}` }));
   await connectToDevice(device);
-  saveLastAddress(device.address);
+  saveLastDevice(device);
 }
 
 /**
@@ -271,15 +299,20 @@ async function promptForConnectPort(address) {
 async function connectToPairedDevice(pairedDevice, { maxRetries = 15, retryDelay = 1000 } = {}) {
   console.log(t('searchingConnect', { address: pairedDevice.address }));
 
-  const [deviceToConnect] = await waitForServices(
-    CONNECT_SERVICE,
-    service => service.address === pairedDevice.address,
-    { maxRetries, retryDelay }
-  );
+  // Search with mDNS and, in parallel, scan the device ports.
+  const controller = new AbortController();
+  const deviceToConnect = await firstFound([
+    waitForServices(
+      CONNECT_SERVICE,
+      service => service.address === pairedDevice.address,
+      { maxRetries, retryDelay, signal: controller.signal }
+    ).then(([device]) => device || null),
+    scanForDevice(pairedDevice.address, controller.signal)
+  ]);
+  controller.abort();
 
   if (!deviceToConnect) {
-    const device = await findDeviceByPortScan(pairedDevice.address) ||
-      await promptForConnectPort(pairedDevice.address);
+    const device = await promptForConnectPort(pairedDevice.address);
     if (device) await connectAndRemember(device);
     return;
   }
@@ -293,7 +326,7 @@ async function connectToPairedDevice(pairedDevice, { maxRetries = 15, retryDelay
 
   if (alreadyConnected) {
     console.log(t('connected', { device: `${deviceToConnect.address}:${deviceToConnect.port}` }));
-    saveLastAddress(deviceToConnect.address);
+    saveLastDevice(deviceToConnect);
     return;
   }
 

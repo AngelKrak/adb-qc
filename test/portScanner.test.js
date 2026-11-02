@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const net = require('net');
-const { buildConnectPacket, isAdbResponse, scanOpenPorts, isAdbPort } = require('../src/utils/portScanner');
+const { buildConnectPacket, isAdbResponse, scanOpenPorts, isAdbPort, findAdbPort } = require('../src/utils/portScanner');
 
 const A_STLS = 0x534c5453;
 
@@ -64,5 +64,21 @@ test('scanOpenPorts finds listening ports in the range', async () => {
     assert.ok(openPorts.includes(port));
   } finally {
     server.close();
+  }
+});
+
+test('findAdbPort returns the preferred port without scanning when adbd answers on it', async () => {
+  const adb = await startServer(socket => socket.once('data', () => {
+    const reply = Buffer.alloc(24);
+    reply.writeUInt32LE(A_STLS, 0);
+    socket.end(reply);
+  }));
+
+  try {
+    const start = Date.now();
+    assert.equal(await findAdbPort('127.0.0.1', { preferredPort: adb.port }), adb.port);
+    assert.ok(Date.now() - start < 1000);
+  } finally {
+    adb.server.close();
   }
 });

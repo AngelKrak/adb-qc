@@ -157,7 +157,7 @@ The running adb server is an old version that doesn't support pairing (for examp
 
 Recent adb versions connect paired devices automatically. Check with `adb devices` whether it is already listed; if not, run `adb-qc --connect`.
 
-Some phones (for example the **OnePlus 13**) don't announce their connection port on the network after pairing, so it can't be found automatically. In that case adb-qc asks for the **IP address & Port** shown on the phone's Wireless debugging screen.
+Some phones (for example the **OnePlus 13**) don't announce their connection port on the network after pairing, so it can't be found automatically. In that case adb-qc finds the port by checking the ports of the phone's IP address (a few seconds), and remembers it so the next `adb-qc --connect` is instant. If it still can't find it, it asks for the **IP address & Port** shown on the phone's Wireless debugging screen.
 
 ## Development
 

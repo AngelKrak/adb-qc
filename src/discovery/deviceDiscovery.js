@@ -2,6 +2,8 @@ const mDnsSd = require('node-dns-sd');
 const { Select, Input } = require('enquirer');
 const { getDevice, parsePort, parseHostPort } = require('../utils/deviceUtils');
 const { t } = require('../i18n');
+const { findAdbPort } = require('../utils/portScanner');
+const { getLastAddress, saveLastAddress } = require('../utils/configStore');
 const {
   pair,
   connectToDevice,
@@ -100,10 +102,10 @@ async function discoverDevices(isPairing) {
   const devices = await waitForServices(serviceType, () => true, { maxRetries: 5 });
 
   if (devices.length === 0) {
-    if (!isPairing && process.stdin.isTTY) {
-      return promptForConnectAddress();
+    if (!isPairing) {
+      return findDeviceWithoutDiscovery();
     }
-    console.log(isPairing ? t('noPairingDevices') : t('noConnectDevices'));
+    console.log(t('noPairingDevices'));
     return null;
   }
 
@@ -182,18 +184,59 @@ async function startPairAndConnect() {
 }
 
 /**
- * Asks the user for the "IP:port" shown in Wireless debugging when no device can be discovered.
- * @returns {Promise<Object>} The device to connect to.
+ * Finds the Wireless debugging port of a device by scanning its ports.
+ * Some phones (e.g. OnePlus 13) never announce the connect service over mDNS.
+ * @param {string} address - The IP address of the device.
+ * @returns {Promise<Object|null>} The device to connect to, or null if not found.
  */
-async function promptForConnectAddress() {
+async function findDeviceByPortScan(address) {
+  console.log(t('scanningPorts', { address }));
+  const port = await findAdbPort(address);
+  return port ? { address, port } : null;
+}
+
+/**
+ * Finds a device to connect to when mDNS discovery finds nothing:
+ * scans the last used address and, if needed, asks the user for "IP" or "IP:port".
+ * @returns {Promise<Object|null>} The device to connect to, or null if not found.
+ */
+async function findDeviceWithoutDiscovery() {
+  const lastAddress = getLastAddress();
+  if (lastAddress) {
+    const device = await findDeviceByPortScan(lastAddress);
+    if (device) return device;
+  }
+
+  if (!process.stdin.isTTY) {
+    console.log(t('noConnectDevices'));
+    return null;
+  }
+
   console.log(t('connectNotFoundAskAddress'));
   const value = await new Input({
     name: 'address',
     message: t('enterAddress'),
+    initial: lastAddress || '',
     validate: input => parseHostPort(input) !== null || t('invalidAddress')
   }).run();
 
-  return parseHostPort(value);
+  const target = parseHostPort(value);
+  if (target.port) return target;
+
+  const device = await findDeviceByPortScan(target.address);
+  if (!device) console.error(t('connectNotFound'));
+  return device;
+}
+
+/**
+ * Connects to a device and remembers its address for the next time.
+ * @param {Object} device - The device to connect to.
+ * @returns {Promise<void>}
+ */
+async function connectAndRemember(device) {
+  console.log(t('connecting', { device: `${device.address}:${device.port}` }));
+  await connectToDevice(device);
+  saveLastAddress(device.address);
 }
 
 /**
@@ -235,11 +278,9 @@ async function connectToPairedDevice(pairedDevice, { maxRetries = 15, retryDelay
   );
 
   if (!deviceToConnect) {
-    const device = await promptForConnectPort(pairedDevice.address);
-    if (device) {
-      console.log(t('connecting', { device: `${device.address}:${device.port}` }));
-      await connectToDevice(device);
-    }
+    const device = await findDeviceByPortScan(pairedDevice.address) ||
+      await promptForConnectPort(pairedDevice.address);
+    if (device) await connectAndRemember(device);
     return;
   }
 
@@ -252,11 +293,11 @@ async function connectToPairedDevice(pairedDevice, { maxRetries = 15, retryDelay
 
   if (alreadyConnected) {
     console.log(t('connected', { device: `${deviceToConnect.address}:${deviceToConnect.port}` }));
+    saveLastAddress(deviceToConnect.address);
     return;
   }
 
-  console.log(t('connecting', { device: `${deviceToConnect.address}:${deviceToConnect.port}` }));
-  await connectToDevice(deviceToConnect);
+  await connectAndRemember(deviceToConnect);
 }
 
 module.exports = {
@@ -264,5 +305,6 @@ module.exports = {
   pairDevice,
   startDiscoverQr,
   startPairAndConnect,
-  connectToPairedDevice
+  connectToPairedDevice,
+  connectAndRemember
 };

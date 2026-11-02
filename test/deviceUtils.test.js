@@ -60,10 +60,10 @@ test('parsePort accepts only valid TCP ports', () => {
   assert.equal(parsePort(''), null);
 });
 
-test('parseHostPort accepts IPv4 addresses with a port', () => {
+test('parseHostPort accepts IPv4 addresses with an optional port', () => {
   assert.deepEqual(parseHostPort('192.168.1.19:33033'), { address: '192.168.1.19', port: 33033 });
   assert.deepEqual(parseHostPort(' 10.0.0.5:5555 '), { address: '10.0.0.5', port: 5555 });
-  assert.equal(parseHostPort('192.168.1.19'), null);
+  assert.deepEqual(parseHostPort('192.168.1.19'), { address: '192.168.1.19', port: null });
   assert.equal(parseHostPort('192.168.1.300:5555'), null);
   assert.equal(parseHostPort('192.168.1.19:0'), null);
   assert.equal(parseHostPort('phone:5555'), null);

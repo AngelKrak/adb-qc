@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { getDevice, parsePort } = require('../src/utils/deviceUtils');
+const { getDevice, parsePort, parseHostPort } = require('../src/utils/deviceUtils');
 
 test('getDevice reads name and port from the PTR and SRV answers', () => {
   const service = {
@@ -58,4 +58,13 @@ test('parsePort accepts only valid TCP ports', () => {
   assert.equal(parsePort('70000'), null);
   assert.equal(parsePort('abc'), null);
   assert.equal(parsePort(''), null);
+});
+
+test('parseHostPort accepts IPv4 addresses with a port', () => {
+  assert.deepEqual(parseHostPort('192.168.1.19:33033'), { address: '192.168.1.19', port: 33033 });
+  assert.deepEqual(parseHostPort(' 10.0.0.5:5555 '), { address: '10.0.0.5', port: 5555 });
+  assert.equal(parseHostPort('192.168.1.19'), null);
+  assert.equal(parseHostPort('192.168.1.300:5555'), null);
+  assert.equal(parseHostPort('192.168.1.19:0'), null);
+  assert.equal(parseHostPort('phone:5555'), null);
 });

@@ -1,6 +1,6 @@
 const mDnsSd = require('node-dns-sd');
 const { Select, Input } = require('enquirer');
-const { getDevice, parsePort } = require('../utils/deviceUtils');
+const { getDevice, parsePort, parseHostPort } = require('../utils/deviceUtils');
 const { t } = require('../i18n');
 const {
   pair,
@@ -100,6 +100,9 @@ async function discoverDevices(isPairing) {
   const devices = await waitForServices(serviceType, () => true, { maxRetries: 5 });
 
   if (devices.length === 0) {
+    if (!isPairing && process.stdin.isTTY) {
+      return promptForConnectAddress();
+    }
     console.log(isPairing ? t('noPairingDevices') : t('noConnectDevices'));
     return null;
   }
@@ -176,6 +179,21 @@ async function startPairAndConnect() {
     await pairDevice(device);
     await connectToPairedDevice(device);
   }
+}
+
+/**
+ * Asks the user for the "IP:port" shown in Wireless debugging when no device can be discovered.
+ * @returns {Promise<Object>} The device to connect to.
+ */
+async function promptForConnectAddress() {
+  console.log(t('connectNotFoundAskAddress'));
+  const value = await new Input({
+    name: 'address',
+    message: t('enterAddress'),
+    validate: input => parseHostPort(input) !== null || t('invalidAddress')
+  }).run();
+
+  return parseHostPort(value);
 }
 
 /**

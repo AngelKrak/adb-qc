@@ -56,4 +56,17 @@ function parsePort(value) {
   return port >= 1 && port <= 65535 ? port : null;
 }
 
-module.exports = { extractDeviceName, extractPort, getDevice, parsePort };
+/**
+ * Parses an "IP:port" address typed by the user.
+ * @param {string} value - The typed value, e.g. '192.168.1.19:33033'.
+ * @returns {{address: string, port: number}|null} The device, or null if it is not valid.
+ */
+function parseHostPort(value) {
+  const match = /^(\d{1,3}(?:\.\d{1,3}){3}):(\d+)$/.exec(String(value || '').trim());
+  if (!match || match[1].split('.').some(part => Number(part) > 255)) return null;
+
+  const port = parsePort(match[2]);
+  return port ? { address: match[1], port } : null;
+}
+
+module.exports = { extractDeviceName, extractPort, getDevice, parsePort, parseHostPort };

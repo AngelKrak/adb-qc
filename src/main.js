@@ -1,8 +1,7 @@
 const { Select } = require('enquirer');
-const { nanoid } = require('nanoid');
 const { checkAdb, connectToDevice } = require('./utils/adbUtils');
 const { discoverDevices, pairDevice, startDiscoverQr, startPairAndConnect } = require('./discovery/deviceDiscovery');
-const { showQR } = require('./utils/qrUtils');
+const { randomId, showQR } = require('./utils/qrUtils');
 const { banner, showVersion, showHelp } = require('./utils/versionUtils');
 const { t } = require('./i18n');
 
@@ -62,8 +61,8 @@ async function handleAction(action) {
   switch (action) {
     case 'qr':
     case 'qr_connect': {
-      const name = `ADB_WIFI_${nanoid()}`;
-      const password = nanoid();
+      const name = `ADB_WIFI_${randomId()}`;
+      const password = randomId();
       showQR(name, password);
       await startDiscoverQr(name, password, { autoConnect: action === 'qr_connect' });
       break;

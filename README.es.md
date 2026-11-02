@@ -165,12 +165,16 @@ cd adb-qc
 npm install
 npm link   # para usar el comando adb-qc con tu copia local
 npm test   # ejecuta las pruebas
-npm run lint   # revisa el estilo del código con ESLint
+npm run lint   # revisa el estilo del código con ESLint (Node.js 20.19+)
 ```
 
 ## Contribuciones
 
-¡Las contribuciones son bienvenidas! Si tienes ideas para mejoras o encuentras errores, no dudes en abrir un **issue** o enviar un **pull request**.
+¡Las contribuciones son bienvenidas! Si tienes ideas para mejoras o encuentras errores, no dudes en abrir un **issue** o enviar un **pull request**. Consulta [CONTRIBUTING.md](CONTRIBUTING.md) (en inglés).
+
+## Seguridad
+
+adb-qc ejecuta el comando `adb` y envía consultas mDNS en tu red local para encontrar dispositivos. [SECURITY.md](SECURITY.md) (en inglés) explica por qué y cómo reportar una vulnerabilidad.
 
 # License
 

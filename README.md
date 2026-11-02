@@ -165,12 +165,16 @@ cd adb-qc
 npm install
 npm link       # use the adb-qc command with your local copy
 npm test       # run the tests
-npm run lint   # check the code style with ESLint
+npm run lint   # check the code style with ESLint (Node.js 20.19+)
 ```
 
 ## Contributing
 
-Contributions are welcome! If you have ideas for improvements or find bugs, feel free to open an **issue** or send a **pull request**.
+Contributions are welcome! If you have ideas for improvements or find bugs, feel free to open an **issue** or send a **pull request**. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Security
+
+adb-qc runs the `adb` command and sends mDNS queries on your local network to find devices. [SECURITY.md](SECURITY.md) explains why, and how to report a vulnerability.
 
 # License
 

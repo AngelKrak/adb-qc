@@ -265,9 +265,49 @@ async function askForDeviceAddress(lastAddress) {
  * @returns {Promise<void>}
  */
 async function connectAndRemember(device) {
-  console.log(t('connecting', { device: `${device.address}:${device.port}` }));
-  await connectToDevice(device);
+  const target = `${device.address}:${device.port}`;
+
+  if (await waitForAdbAutoConnect(device)) {
+    console.log(t('connected', { device: target }));
+  } else {
+    console.log(t('connecting', { device: target }));
+    await connectToDevice(device);
+  }
   saveLastDevice(device);
+}
+
+/**
+ * Checks if adb already has a connection to the device, by "IP:port" or by its mDNS name.
+ * @param {Object} device - The device.
+ * @param {Array<Object>} services - The connect services announced on the network.
+ * @returns {Promise<boolean>}
+ */
+async function isConnectedByAdb(device, services) {
+  const names = services.filter(service => service.address === device.address).map(service => service.deviceName);
+  if (device.deviceName) names.push(device.deviceName);
+
+  const serials = await getConnectedSerials();
+  return serials.some(serial =>
+    serial === `${device.address}:${device.port}` || names.some(name => serial.startsWith(`${name}.`))
+  );
+}
+
+/**
+ * Recent adb versions connect paired devices automatically when they announce themselves over mDNS.
+ * If the device is announced, waits a moment for that connection instead of creating a second one.
+ * @param {Object} device - The device.
+ * @returns {Promise<boolean>} True if adb is connected to the device.
+ */
+async function waitForAdbAutoConnect(device) {
+  const services = await getAdbMdnsServices(CONNECT_SERVICE);
+  const announced = services.some(service => service.address === device.address);
+  const attempts = announced ? 4 : 1;
+
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (attempt > 0) await wait(500);
+    if (await isConnectedByAdb(device, services)) return true;
+  }
+  return false;
 }
 
 /**
@@ -317,19 +357,6 @@ async function connectToPairedDevice(pairedDevice, { maxRetries = 8, retryDelay 
   if (!deviceToConnect) {
     const device = await promptForConnectPort(pairedDevice.address);
     if (device) await connectAndRemember(device);
-    return;
-  }
-
-  // Recent adb versions connect paired devices automatically via mDNS.
-  const serials = await getConnectedSerials();
-  const alreadyConnected = serials.some(serial =>
-    serial === `${deviceToConnect.address}:${deviceToConnect.port}` ||
-    (deviceToConnect.deviceName && serial.startsWith(`${deviceToConnect.deviceName}.`))
-  );
-
-  if (alreadyConnected) {
-    console.log(t('connected', { device: `${deviceToConnect.address}:${deviceToConnect.port}` }));
-    saveLastDevice(deviceToConnect);
     return;
   }
 

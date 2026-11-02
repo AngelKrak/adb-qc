@@ -102,7 +102,9 @@ async function connectToDevice(device) {
   const output = stdout.trim();
 
   if (!/^(already )?connected to/.test(output)) {
-    throw new Error(output || t('unknownConnectionError'));
+    // The phone answers but rejects the connection when this computer is not paired with it.
+    const hint = /^failed to connect/.test(output) ? `\n${t('notPairedHint')}` : '';
+    throw new Error((output || t('unknownConnectionError')) + hint);
   }
   console.log(t('connected', { device: `${device.address}:${device.port}` }));
 }

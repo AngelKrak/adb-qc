@@ -13,7 +13,7 @@ Only the latest published version of adb-qc receives security fixes.
 
 Please **do not open a public issue** for security problems.
 
-Report it privately through [GitHub Security Advisories](https://github.com/AngelKrak/adb-qc/security/advisories/new) or by email to angel-krak@hotmail.com. Include the steps to reproduce it and the affected version.
+Report it privately through [GitHub Security Advisories](https://github.com/AngelKrak/adb-qc/security/advisories/new). Include the steps to reproduce it and the affected version.
 
 You will get an answer within 7 days.
 

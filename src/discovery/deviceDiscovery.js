@@ -52,19 +52,22 @@ async function scanForDevice(address, signal) {
 /**
  * Discovers services of the given type using both the adb server and our own mDNS query.
  * @param {string} serviceType - The service type, e.g. '_adb-tls-connect._tcp'.
- * @returns {Promise<Array<Object>>} The discovered devices, without duplicates.
+ * @param {function(Object):boolean} predicate - Filter for the wanted devices.
+ * @returns {Promise<Array<Object>>} The wanted devices, without duplicates.
  */
-async function findServices(serviceType) {
-  const [adbServices, mdnsServices] = await Promise.all([
-    getAdbMdnsServices(serviceType),
-    mDnsSd.discover({ name: `${serviceType}.local` })
-      .then(list => list.map(service => getDevice(service, serviceType)))
-      .catch(() => [])
-  ]);
+async function findServices(serviceType, predicate = () => true) {
+  const isWanted = device => Boolean(device.address && device.port) && predicate(device);
+
+  // Our own mDNS query always waits ~3 seconds; adb answers right away, so its results are used
+  // as soon as they include the wanted device.
+  const mdnsSearch = mDnsSd.discover({ name: `${serviceType}.local` })
+    .then(list => list.map(service => getDevice(service, serviceType)))
+    .catch(() => []);
+  const adbServices = (await getAdbMdnsServices(serviceType)).filter(isWanted);
+  const mdnsServices = adbServices.length > 0 ? [] : (await mdnsSearch).filter(isWanted);
 
   const devices = new Map();
   [...adbServices, ...mdnsServices]
-    .filter(device => device.address && device.port)
     .forEach(device => {
       const key = `${device.address}:${device.port}`;
       if (!devices.has(key)) devices.set(key, device);
@@ -87,7 +90,7 @@ async function waitForServices(serviceType, predicate, { maxRetries, retryDelay 
   for (let retryCount = 0; retryCount < maxRetries && !signal?.aborted; retryCount++) {
     if (retryCount > 0) await wait(retryDelay);
 
-    const devices = (await findServices(serviceType)).filter(predicate);
+    const devices = await findServices(serviceType, predicate);
     if (devices.length > 0) return devices;
   }
   return [];
@@ -296,7 +299,7 @@ async function promptForConnectPort(address) {
  * @param {number} options.retryDelay - Delay between retries in milliseconds.
  * @returns {Promise<void>}
  */
-async function connectToPairedDevice(pairedDevice, { maxRetries = 15, retryDelay = 1000 } = {}) {
+async function connectToPairedDevice(pairedDevice, { maxRetries = 8, retryDelay = 1000 } = {}) {
   console.log(t('searchingConnect', { address: pairedDevice.address }));
 
   // Search with mDNS and, in parallel, scan the device ports.

@@ -157,6 +157,8 @@ El servidor de adb que está corriendo es una versión antigua que no soporta em
 
 Las versiones recientes de adb conectan automáticamente los dispositivos emparejados. Revisa con `adb devices` si ya aparece; si no, ejecuta `adb-qc --connect`.
 
+Algunos teléfonos (por ejemplo el **OnePlus 13**) no anuncian su puerto de conexión en la red después de emparejar, así que no se pueden encontrar automáticamente. En ese caso adb-qc encuentra el puerto revisando los puertos de la IP del teléfono (unos segundos) y lo recuerda, para que el siguiente `adb-qc --connect` sea instantáneo. Si aun así no lo encuentra, te pide la **Dirección IP y puerto** que aparece en la pantalla de Depuración inalámbrica del teléfono.
+
 ## Desarrollo
 
 ```sh
@@ -165,12 +167,16 @@ cd adb-qc
 npm install
 npm link   # para usar el comando adb-qc con tu copia local
 npm test   # ejecuta las pruebas
-npm run lint   # revisa el estilo del código con ESLint
+npm run lint   # revisa el estilo del código con ESLint (Node.js 20.19+)
 ```
 
 ## Contribuciones
 
-¡Las contribuciones son bienvenidas! Si tienes ideas para mejoras o encuentras errores, no dudes en abrir un **issue** o enviar un **pull request**.
+¡Las contribuciones son bienvenidas! Si tienes ideas para mejoras o encuentras errores, no dudes en abrir un **issue** o enviar un **pull request**. Consulta [CONTRIBUTING.md](CONTRIBUTING.md) (en inglés).
+
+## Seguridad
+
+adb-qc ejecuta el comando `adb` y envía consultas mDNS en tu red local para encontrar dispositivos. [SECURITY.md](SECURITY.md) (en inglés) explica por qué y cómo reportar una vulnerabilidad.
 
 # License
 

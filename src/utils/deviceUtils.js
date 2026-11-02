@@ -43,4 +43,31 @@ function getDevice(service, serviceType = '_adb-tls-pairing._tcp') {
   };
 }
 
-module.exports = { extractDeviceName, extractPort, getDevice };
+/**
+ * Parses a TCP port typed by the user.
+ * @param {string} value - The typed value.
+ * @returns {number|null} The port, or null if it is not valid.
+ */
+function parsePort(value) {
+  const text = String(value || '').trim();
+  if (!/^\d+$/.test(text)) return null;
+
+  const port = Number(text);
+  return port >= 1 && port <= 65535 ? port : null;
+}
+
+/**
+ * Parses an "IP" or "IP:port" address typed by the user.
+ * @param {string} value - The typed value, e.g. '192.168.1.19' or '192.168.1.19:33033'.
+ * @returns {{address: string, port: number|null}|null} The device, or null if it is not valid.
+ */
+function parseHostPort(value) {
+  const match = /^(\d{1,3}(?:\.\d{1,3}){3})(?::(\d+))?$/.exec(String(value || '').trim());
+  if (!match || match[1].split('.').some(part => Number(part) > 255)) return null;
+  if (match[2] === undefined) return { address: match[1], port: null };
+
+  const port = parsePort(match[2]);
+  return port ? { address: match[1], port } : null;
+}
+
+module.exports = { extractDeviceName, extractPort, getDevice, parsePort, parseHostPort };

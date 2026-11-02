@@ -157,6 +157,8 @@ The running adb server is an old version that doesn't support pairing (for examp
 
 Recent adb versions connect paired devices automatically. Check with `adb devices` whether it is already listed; if not, run `adb-qc --connect`.
 
+Some phones (for example the **OnePlus 13**) don't announce their connection port on the network after pairing, so it can't be found automatically. In that case adb-qc finds the port by checking the ports of the phone's IP address (a few seconds), and remembers it so the next `adb-qc --connect` is instant. If it still can't find it, it asks for the **IP address & Port** shown on the phone's Wireless debugging screen.
+
 ## Development
 
 ```sh
@@ -165,12 +167,16 @@ cd adb-qc
 npm install
 npm link       # use the adb-qc command with your local copy
 npm test       # run the tests
-npm run lint   # check the code style with ESLint
+npm run lint   # check the code style with ESLint (Node.js 20.19+)
 ```
 
 ## Contributing
 
-Contributions are welcome! If you have ideas for improvements or find bugs, feel free to open an **issue** or send a **pull request**.
+Contributions are welcome! If you have ideas for improvements or find bugs, feel free to open an **issue** or send a **pull request**. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Security
+
+adb-qc runs the `adb` command and sends mDNS queries on your local network to find devices. [SECURITY.md](SECURITY.md) explains why, and how to report a vulnerability.
 
 # License
 

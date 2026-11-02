@@ -1,6 +1,6 @@
 const mDnsSd = require('node-dns-sd');
 const { Select, Input } = require('enquirer');
-const { getDevice } = require('../utils/deviceUtils');
+const { getDevice, parsePort } = require('../utils/deviceUtils');
 const { t } = require('../i18n');
 const {
   pair,
@@ -179,6 +179,27 @@ async function startPairAndConnect() {
 }
 
 /**
+ * Asks the user for the port shown in Wireless debugging when the device can't be discovered.
+ * @param {string} address - The IP address of the paired device.
+ * @returns {Promise<Object|null>} The device to connect to, or null if there is no interactive terminal.
+ */
+async function promptForConnectPort(address) {
+  if (!process.stdin.isTTY) {
+    console.error(t('connectNotFound'));
+    return null;
+  }
+
+  console.log(t('connectNotFoundAskPort', { address }));
+  const port = await new Input({
+    name: 'port',
+    message: t('enterPort', { address }),
+    validate: value => parsePort(value) !== null || t('invalidPort')
+  }).run();
+
+  return { address, port: parsePort(port) };
+}
+
+/**
  * Connects to a device that was just paired.
  * @param {Object} pairedDevice - The paired device.
  * @param {Object} options - Configuration options for discovery.
@@ -196,7 +217,11 @@ async function connectToPairedDevice(pairedDevice, { maxRetries = 15, retryDelay
   );
 
   if (!deviceToConnect) {
-    console.error(t('connectNotFound'));
+    const device = await promptForConnectPort(pairedDevice.address);
+    if (device) {
+      console.log(t('connecting', { device: `${device.address}:${device.port}` }));
+      await connectToDevice(device);
+    }
     return;
   }
 

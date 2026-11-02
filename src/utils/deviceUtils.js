@@ -43,4 +43,17 @@ function getDevice(service, serviceType = '_adb-tls-pairing._tcp') {
   };
 }
 
-module.exports = { extractDeviceName, extractPort, getDevice };
+/**
+ * Parses a TCP port typed by the user.
+ * @param {string} value - The typed value.
+ * @returns {number|null} The port, or null if it is not valid.
+ */
+function parsePort(value) {
+  const text = String(value || '').trim();
+  if (!/^\d+$/.test(text)) return null;
+
+  const port = Number(text);
+  return port >= 1 && port <= 65535 ? port : null;
+}
+
+module.exports = { extractDeviceName, extractPort, getDevice, parsePort };

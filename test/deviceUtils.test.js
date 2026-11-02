@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { getDevice } = require('../src/utils/deviceUtils');
+const { getDevice, parsePort } = require('../src/utils/deviceUtils');
 
 test('getDevice reads name and port from the PTR and SRV answers', () => {
   const service = {
@@ -49,4 +49,13 @@ test('getDevice ignores answers of other service types', () => {
   };
 
   assert.equal(getDevice(service, '_adb-tls-pairing._tcp').deviceName, null);
+});
+
+test('parsePort accepts only valid TCP ports', () => {
+  assert.equal(parsePort('39971'), 39971);
+  assert.equal(parsePort(' 5555 '), 5555);
+  assert.equal(parsePort('0'), null);
+  assert.equal(parsePort('70000'), null);
+  assert.equal(parsePort('abc'), null);
+  assert.equal(parsePort(''), null);
 });

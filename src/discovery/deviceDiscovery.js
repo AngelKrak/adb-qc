@@ -299,7 +299,7 @@ async function promptForConnectPort(address) {
  * @param {number} options.retryDelay - Delay between retries in milliseconds.
  * @returns {Promise<void>}
  */
-async function connectToPairedDevice(pairedDevice, { maxRetries = 15, retryDelay = 1000 } = {}) {
+async function connectToPairedDevice(pairedDevice, { maxRetries = 8, retryDelay = 1000 } = {}) {
   console.log(t('searchingConnect', { address: pairedDevice.address }));
 
   // Search with mDNS and, in parallel, scan the device ports.

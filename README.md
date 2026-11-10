@@ -97,7 +97,7 @@ Run `adb-qc --pair` to pair a device with a pairing code.
 
 3.  **Connect to a device**:
 
-Run `adb-qc --connect` to connect to a device available on the network.
+Run `adb-qc --connect` to connect to a device available on the network. It shows a list with the devices found on the network and the ones you connected before (with their model, e.g. `OPD2415`), plus an option to enter the IP address manually.
 
 ![Connect to a device](https://vhs.charm.sh/vhs-27uAI0Gg2wpaaP2TyI46y8.gif)
 

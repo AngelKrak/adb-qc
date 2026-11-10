@@ -168,7 +168,22 @@ async function getConnectedSerials() {
   }
 }
 
+/**
+ * Reads the model of a connected device.
+ * @param {string} serial - The adb serial of the device.
+ * @returns {Promise<string|null>} The model, e.g. 'CPH2653', or null if it can't be read.
+ */
+async function getDeviceModel(serial) {
+  try {
+    const { stdout } = await runAdb(['-s', serial, 'shell', 'getprop', 'ro.product.model']);
+    return stdout.trim() || null;
+  } catch (error) {
+    return null;
+  }
+}
+
 module.exports = {
+  getDeviceModel,
   runAdb,
   checkAdb,
   parseAdbVersion,

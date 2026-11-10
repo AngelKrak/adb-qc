@@ -2,11 +2,19 @@ const mDnsSd = require('node-dns-sd');
 const { Select, Input } = require('enquirer');
 const { getDevice, parsePort, parseHostPort } = require('../utils/deviceUtils');
 const { t } = require('../i18n');
-const { findAdbPort } = require('../utils/portScanner');
-const { getLastDevice, saveLastDevice } = require('../utils/configStore');
+const { findAdbPort, isAdbPort } = require('../utils/portScanner');
+const {
+  getLastDevice,
+  saveLastDevice,
+  getSavedDevices,
+  getDeviceModels,
+  saveDeviceModel
+} = require('../utils/configStore');
+const { buildConnectChoices } = require('./connectChoices');
 const {
   pair,
   connectToDevice,
+  getDeviceModel,
   getAdbMdnsServices,
   getConnectedSerials
 } = require('../utils/adbUtils');
@@ -143,21 +151,77 @@ async function discoverDevices(isPairing) {
     return selectDevice(devices, isPairing);
   }
 
-  // Search with mDNS and, in parallel, scan the last used address.
+  return process.stdin.isTTY ? chooseDeviceToConnect() : findDeviceToConnect();
+}
+
+/**
+ * Shows the devices announced on the network, the last used device and a manual entry,
+ * and returns the one chosen by the user.
+ * @returns {Promise<Object|null>} The device to connect to, or null if not found.
+ */
+async function chooseDeviceToConnect() {
+  const lastAddress = getLastDevice()?.address || null;
+  const [discovered, saved] = await Promise.all([
+    waitForServices(CONNECT_SERVICE, () => true, { maxRetries: 2 }),
+    Promise.all(getSavedDevices().map(async device => ({
+      ...device,
+      reachable: device.port ? await isAdbPort(device.address, device.port) : false
+    })))
+  ]);
+
+  const choices = buildConnectChoices({
+    discovered,
+    saved,
+    lastAddress,
+    models: getDeviceModels(),
+    labels: { lastUsed: t('lastUsed'), findPort: t('findPort'), manualEntry: t('manualEntry') }
+  });
+
+  // Only the manual entry: nothing was found.
+  if (choices.length === 1) {
+    console.log(t('connectNotFoundAskAddress'));
+    return askForDeviceAddress(null);
+  }
+
+  const choice = await new Select({
+    name: 'device',
+    message: t('selectConnect'),
+    choices: choices.map(({ key, label, hint }) => ({ name: key, message: label, hint })),
+    result(name) {
+      return choices.find(item => item.key === name);
+    }
+  }).run();
+
+  if (choice.kind === 'device') return choice.device;
+  if (choice.kind === 'manual') return askForDeviceAddress(lastAddress);
+
+  console.log(t('scanningPorts', { address: choice.device.address }));
+  const device = await scanForDevice(choice.device.address);
+  if (!device) console.error(t('connectNotFound'));
+  return device;
+}
+
+/**
+ * Finds a device to connect to without asking (no interactive terminal): the first announced
+ * device or, in parallel, the last used address.
+ * @returns {Promise<Object|null>} The device to connect to, or null if not found.
+ */
+async function findDeviceToConnect() {
   const lastAddress = getLastDevice()?.address || null;
   const controller = new AbortController();
   const searches = [
     waitForServices(CONNECT_SERVICE, () => true, { maxRetries: 5, signal: controller.signal })
-      .then(devices => (devices.length > 0 ? devices : null))
+      .then(([device]) => device || null)
   ];
   if (lastAddress) {
-    searches.push(scanForDevice(lastAddress, controller.signal).then(device => (device ? [device] : null)));
+    searches.push(scanForDevice(lastAddress, controller.signal));
   }
 
-  const devices = await firstFound(searches);
+  const device = await firstFound(searches);
   controller.abort();
 
-  return devices ? selectDevice(devices, isPairing) : askForDeviceAddress(lastAddress);
+  if (!device) console.log(t('noConnectDevices'));
+  return device;
 }
 
 /**
@@ -242,7 +306,6 @@ async function askForDeviceAddress(lastAddress) {
     return null;
   }
 
-  console.log(t('connectNotFoundAskAddress'));
   const value = await new Input({
     name: 'address',
     message: t('enterAddress'),
@@ -274,22 +337,38 @@ async function connectAndRemember(device) {
     await connectToDevice(device);
   }
   saveLastDevice(device);
+  await rememberModel(device);
 }
 
 /**
- * Checks if adb already has a connection to the device, by "IP:port" or by its mDNS name.
+ * Saves the model of a connected device, so it can be shown in the device list next time.
+ * @param {Object} device - The connected device.
+ * @returns {Promise<void>}
+ */
+async function rememberModel(device) {
+  const services = await getAdbMdnsServices(CONNECT_SERVICE);
+  const serial = await findConnectedSerial(device, services);
+  if (!serial) return;
+
+  const model = await getDeviceModel(serial);
+  const mdnsName = serial.includes('._adb-tls-connect') ? serial.split('.')[0] : null;
+  if (model) saveDeviceModel([device.deviceName, mdnsName, device.address], model);
+}
+
+/**
+ * Finds the adb serial of the device, by "IP:port" or by its mDNS name.
  * @param {Object} device - The device.
  * @param {Array<Object>} services - The connect services announced on the network.
- * @returns {Promise<boolean>}
+ * @returns {Promise<string|null>} The serial, or null if adb is not connected to the device.
  */
-async function isConnectedByAdb(device, services) {
+async function findConnectedSerial(device, services) {
   const names = services.filter(service => service.address === device.address).map(service => service.deviceName);
   if (device.deviceName) names.push(device.deviceName);
 
   const serials = await getConnectedSerials();
-  return serials.some(serial =>
+  return serials.find(serial =>
     serial === `${device.address}:${device.port}` || names.some(name => serial.startsWith(`${name}.`))
-  );
+  ) || null;
 }
 
 /**
@@ -305,7 +384,7 @@ async function waitForAdbAutoConnect(device) {
 
   for (let attempt = 0; attempt < attempts; attempt++) {
     if (attempt > 0) await wait(500);
-    if (await isConnectedByAdb(device, services)) return true;
+    if (await findConnectedSerial(device, services)) return true;
   }
   return false;
 }

@@ -43,7 +43,45 @@ function getLastDevice() {
  * @param {{address: string, port: number}} device - The device.
  */
 function saveLastDevice({ address, port }) {
-  writeConfig({ ...readConfig(), lastAddress: address, lastPort: port });
+  const config = readConfig();
+  const ports = { ...config.ports, [address]: port };
+  writeConfig({ ...config, lastAddress: address, lastPort: port, ports });
 }
 
-module.exports = { getLastDevice, saveLastDevice };
+/**
+ * Returns every device connected before, the last one first.
+ * @returns {Array<{address: string, port: number|null}>}
+ */
+function getSavedDevices() {
+  const { lastAddress, lastPort, ports = {} } = readConfig();
+  const saved = { ...ports };
+  if (lastAddress) saved[lastAddress] = lastPort || saved[lastAddress] || null;
+
+  return Object.entries(saved)
+    .map(([address, port]) => ({ address, port: port || null }))
+    .sort((a, b) => (b.address === lastAddress) - (a.address === lastAddress));
+}
+
+/**
+ * Returns the known device models, by mDNS name or IP address.
+ * @returns {Object<string, string>}
+ */
+function getDeviceModels() {
+  return readConfig().models || {};
+}
+
+/**
+ * Saves the model of a device under the given keys (mDNS name and/or IP address).
+ * @param {string[]} keys - The keys to save the model under.
+ * @param {string} model - The device model, e.g. 'CPH2653'.
+ */
+function saveDeviceModel(keys, model) {
+  const config = readConfig();
+  const models = { ...config.models };
+  keys.filter(Boolean).forEach(key => {
+    models[key] = model;
+  });
+  writeConfig({ ...config, models });
+}
+
+module.exports = { getLastDevice, saveLastDevice, getSavedDevices, getDeviceModels, saveDeviceModel };

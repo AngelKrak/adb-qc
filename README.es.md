@@ -97,7 +97,7 @@ Ejecuta el comando `adb-qc --pair` para emparejar un dispositivo utilizando un c
 
 3.  **Conectar a un Dispositivo**:
 
-Ejecuta el comando `adb-qc --connect` para conectar a un dispositivo disponible en la red.
+Ejecuta el comando `adb-qc --connect` para conectar a un dispositivo disponible en la red. Muestra una lista con los dispositivos encontrados en la red y los que ya conectaste antes (con su modelo, por ejemplo `OPD2415`), además de una opción para escribir la IP a mano.
 
 ![Conectar a un Dispositivo](https://vhs.charm.sh/vhs-27uAI0Gg2wpaaP2TyI46y8.gif)
 

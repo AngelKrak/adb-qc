@@ -1,18 +1,12 @@
-const { Select } = require('enquirer');
 const { checkAdb } = require('./utils/adbUtils');
-const {
-  discoverDevices,
-  pairDevice,
-  startDiscoverQr,
-  startPairAndConnect,
-  connectAndRemember
-} = require('./discovery/deviceDiscovery');
-const { randomId, showQR } = require('./utils/qrUtils');
-const { banner, showVersion, showHelp } = require('./utils/versionUtils');
+const { pairWithQr, pairWithCode } = require('./flows/pairing');
+const { connectDevice } = require('./flows/connecting');
+const { chooseAction } = require('./cli/prompts');
+const { printBanner, printVersion, printHelp } = require('./cli/output');
 const { t } = require('./i18n');
 
 /**
- * Command line flags for each action.
+ * Command line flags of each action.
  */
 const ACTION_FLAGS = {
   qr: ['--qr', '-q'],
@@ -25,9 +19,21 @@ const ACTION_FLAGS = {
 };
 
 /**
+ * What each action does once adb is ready.
+ * @type {Object<string, function(): Promise<void>>}
+ */
+const ACTIONS = {
+  qr: () => pairWithQr({ connect: false }),
+  qr_connect: () => pairWithQr({ connect: true }),
+  pair: () => pairWithCode({ connect: false }),
+  pair_connect: () => pairWithCode({ connect: true }),
+  connect: connectDevice,
+};
+
+/**
  * Gets the action from the command line arguments.
  * @param {string[]} args - The command line arguments.
- * @returns {string|null} The action or null if no flag was given.
+ * @returns {string|null} The action, or `null` if no known flag was given.
  */
 function parseAction(args) {
   const action = Object.keys(ACTION_FLAGS).find(key => ACTION_FLAGS[key].some(flag => args.includes(flag)));
@@ -35,82 +41,22 @@ function parseAction(args) {
 }
 
 /**
- * Displays a prompt to choose an action with clear instructions.
- * @returns {Promise<string>} The chosen action.
- */
-async function promptForAction() {
-  const prompt = new Select({
-    name: 'action',
-    message: t('menuTitle'),
-    choices: [
-      { value: 'qr', name: t('menuQr') },
-      { value: 'qr_connect', name: t('menuQrConnect') },
-      { value: 'pair', name: t('menuPair') },
-      { value: 'pair_connect', name: t('menuPairConnect') },
-      { value: 'connect', name: t('menuConnect') },
-    ],
-    result(value) {
-      const selected = this.choices.find(choice => choice.name === value);
-      return selected ? selected.value : value;
-    }
-  });
-
-  return await prompt.run();
-}
-
-/**
- * Handles the action based on the argument or user input.
- * @param {string} action - The action to perform.
- * @returns {Promise<void>}
- */
-async function handleAction(action) {
-  switch (action) {
-    case 'qr':
-    case 'qr_connect': {
-      const name = `ADB_WIFI_${randomId()}`;
-      const password = randomId();
-      showQR(name, password);
-      await startDiscoverQr(name, password, { autoConnect: action === 'qr_connect' });
-      break;
-    }
-    case 'pair': {
-      const device = await discoverDevices(true);
-      if (device) {
-        await pairDevice(device);
-      }
-      break;
-    }
-    case 'pair_connect':
-      await startPairAndConnect();
-      break;
-    case 'connect': {
-      const device = await discoverDevices(false);
-      if (device) {
-        await connectAndRemember(device);
-      }
-      break;
-    }
-    default:
-      throw new Error(t('unknownAction', { action }));
-  }
-}
-
-/**
- * Main function to start the device discovery and connection process.
- * @param {string[]} args - The command line arguments.
+ * Runs adb-qc: the action given as a flag or, without flags, the one chosen in the menu.
+ * @param {string[]} [args] - The command line arguments.
  * @returns {Promise<void>}
  */
 async function main(args = process.argv.slice(2)) {
   const action = parseAction(args);
 
-  if (action === 'version') return showVersion();
-  if (action === 'help') return showHelp();
+  if (action === 'version') return printVersion();
+  if (action === 'help') return printHelp();
 
-  console.log(banner);
+  printBanner();
 
   try {
     await checkAdb();
-    await handleAction(action || await promptForAction());
+    const run = ACTIONS[action || await chooseAction()];
+    await run();
   } catch (error) {
     // Enquirer rejects with an empty value when the user cancels a prompt (Ctrl + C).
     if (!error) {

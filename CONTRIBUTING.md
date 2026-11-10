@@ -11,6 +11,25 @@ npm install
 npm link   # use the adb-qc command with your local copy
 ```
 
+## Project structure
+
+Each folder has one responsibility, and dependencies only point down the list:
+
+```
+src/
+  main.js         Reads the command line flags and runs the matching flow.
+  flows/          What each action does: pairing.js (QR / pairing code) and connecting.js.
+  cli/            Terminal I/O only: prompts.js (questions) and output.js (banner, help, version).
+  connection/     Connecting to a phone without duplicates and remembering it.
+  discovery/      Finding phones: mDNS services, port search and the connect list (pure logic).
+  utils/          adb commands, port scanner, config file, QR code and small helpers.
+  i18n/           English and Spanish messages.
+  types.js        Shared JSDoc types (Device).
+```
+
+- Keep pure logic (parsers, list building) free of I/O so it can be tested in `test/`.
+- Document exported functions with JSDoc; use comments inside functions only to explain *why*.
+
 ## Before opening a pull request
 
 ```sh

@@ -24,9 +24,9 @@ function extractPort(answer) {
 
 /**
  * Retrieves device information from a service object.
- * @param {Object} service - The service object returned from mDnsSd.discover().
+ * @param {Object} service - A service returned by `mDnsSd.discover()`.
  * @param {string} serviceType - The service type, e.g. '_adb-tls-pairing._tcp'.
- * @returns {Object} The device information.
+ * @returns {import('../types').Device}
  */
 function getDevice(service, serviceType = '_adb-tls-pairing._tcp') {
   const answers = (service.packet && service.packet.answers) || [];

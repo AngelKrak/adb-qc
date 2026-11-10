@@ -1,5 +1,10 @@
 const messages = {
   en: {
+    bannerTitle: 'Welcome to ADB Quick Connect',
+    bannerSubtitle: 'Wi-Fi - QR Code - Pairing Code',
+    versionTitle: 'VERSION INFO:',
+    versionUnknown: 'unknown',
+    adbMissing: 'not found',
     adbNotFound: 'adb was not found. Install the Android SDK Platform-Tools and make sure adb is in your PATH.',
     adbTooOld: 'Your adb version ({major}) does not support wireless pairing. Update the Android SDK Platform-Tools to version {min} or newer.',
     outdatedServer: '⚠️ The running adb server does not support pairing (it is probably an old adb, e.g. from Genymotion).\n   Restarting the adb server with the adb found in your PATH...',
@@ -13,6 +18,9 @@ const messages = {
     noConnectDevices: 'No devices found. Make sure Wireless debugging is enabled on your phone.',
     selectPair: 'Select device to pair:',
     selectConnect: 'Select device to connect:',
+    lastUsed: 'last used',
+    findPort: 'find port',
+    manualEntry: '✏️  Enter IP or IP:PORT',
     pairing: 'Pairing your device: {device}',
     enterCode: 'Enter pairing code:',
     invalidCode: 'The pairing code has 6 digits.',
@@ -36,7 +44,6 @@ const messages = {
     menuPair: '🔑 Pair device with pairing code',
     menuPairConnect: '🔑 Pair and connect device with pairing code',
     menuConnect: '🔌 Connect to a device',
-    unknownAction: 'Unknown action: {action}',
     cancelled: 'Cancelled.',
     help: `
 Usage: adb-qc [option]
@@ -55,6 +62,11 @@ Set ADB_QC_LANG=en or ADB_QC_LANG=es to change the language.
 `,
   },
   es: {
+    bannerTitle: 'Bienvenido a ADB Quick Connect',
+    bannerSubtitle: 'Wi-Fi - Código QR - Código de vinculación',
+    versionTitle: 'INFORMACIÓN DE VERSIÓN:',
+    versionUnknown: 'desconocida',
+    adbMissing: 'no encontrado',
     adbNotFound: 'No se encontró adb. Instala Android SDK Platform-Tools y asegúrate de que adb esté en tu PATH.',
     adbTooOld: 'Tu versión de adb ({major}) no soporta el emparejamiento inalámbrico. Actualiza Android SDK Platform-Tools a la versión {min} o superior.',
     outdatedServer: '⚠️ El servidor de adb en ejecución no soporta emparejamiento (probablemente es un adb antiguo, por ejemplo el de Genymotion).\n   Reiniciando el servidor de adb con el adb de tu PATH...',
@@ -68,6 +80,9 @@ Set ADB_QC_LANG=en or ADB_QC_LANG=es to change the language.
     noConnectDevices: 'No se encontraron dispositivos. Asegúrate de que la Depuración inalámbrica esté activada en tu teléfono.',
     selectPair: 'Selecciona el dispositivo a emparejar:',
     selectConnect: 'Selecciona el dispositivo a conectar:',
+    lastUsed: 'último usado',
+    findPort: 'buscar puerto',
+    manualEntry: '✏️  Escribir IP o IP:PUERTO',
     pairing: 'Emparejando tu dispositivo: {device}',
     enterCode: 'Escribe el código de vinculación:',
     invalidCode: 'El código de vinculación tiene 6 dígitos.',
@@ -91,7 +106,6 @@ Set ADB_QC_LANG=en or ADB_QC_LANG=es to change the language.
     menuPair: '🔑 Emparejar dispositivo con código de vinculación',
     menuPairConnect: '🔑 Emparejar y conectar dispositivo con código de vinculación',
     menuConnect: '🔌 Conectar a un dispositivo',
-    unknownAction: 'Acción desconocida: {action}',
     cancelled: 'Cancelado.',
     help: `
 Uso: adb-qc [opción]

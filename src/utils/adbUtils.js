@@ -72,7 +72,7 @@ async function restartAdbServer() {
 /**
  * Pairs a device using adb pair with the given pairing code.
  * If the adb server is too old to support pairing, it is restarted once.
- * @param {Object} device - The device to pair with.
+ * @param {import('../types').Device} device - The phone showing the pairing code or QR screen.
  * @param {string} code - The pairing code or QR password.
  * @param {boolean} serverRestarted - Indicates if the adb server was already restarted.
  * @returns {Promise<void>}
@@ -93,9 +93,10 @@ async function pair(device, code, serverRestarted = false) {
 }
 
 /**
- * Connects to a device using adb connect command.
- * @param {Object} device - The device to connect to.
+ * Connects to a phone with `adb connect`.
+ * @param {import('../types').Device} device - The phone, with its connect port.
  * @returns {Promise<void>}
+ * @throws {Error} With adb's output when the phone can't be reached or rejects the connection.
  */
 async function connectToDevice(device) {
   const { stdout } = await runAdb(['connect', `${device.address}:${device.port}`]);
@@ -106,7 +107,6 @@ async function connectToDevice(device) {
     const hint = /^failed to connect/.test(output) ? `\n${t('notPairedHint')}` : '';
     throw new Error((output || t('unknownConnectionError')) + hint);
   }
-  console.log(t('connected', { device: `${device.address}:${device.port}` }));
 }
 
 /**

@@ -81,6 +81,10 @@ Messages are shown in English or Spanish depending on your system language. To c
 ADB_QC_LANG=es adb-qc
 ```
 
+### New versions
+
+Once a day, adb-qc asks the npm registry for the latest version. If there is a newer one, it tells you at the end with the command to update (`npm install -g adb-qc`). The check never delays the tool: if the network is slow or offline, it is skipped. It doesn't run in CI or when the output isn't a terminal. To turn it off, set `ADB_QC_NO_UPDATE_CHECK=1` (or the common `NO_UPDATE_NOTIFIER=1`).
+
 ### Examples
 
 1.  **Show a QR code for pairing**:

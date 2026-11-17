@@ -53,4 +53,12 @@ function printHelp() {
   console.log(t('help'));
 }
 
-module.exports = { printBanner, printVersion, printHelp };
+/**
+ * Tells the user that a newer adb-qc is published and how to install it.
+ * @param {string} latest - The newer version, e.g. '1.4.0'.
+ */
+function printUpdateNotice(latest) {
+  console.log(`\n${t('updateAvailable', { current: version, latest })}\n${t('updateCommand')}`);
+}
+
+module.exports = { printBanner, printVersion, printHelp, printUpdateNotice };

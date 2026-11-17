@@ -81,6 +81,10 @@ Los mensajes se muestran en español o en inglés según el idioma de tu sistema
 ADB_QC_LANG=en adb-qc
 ```
 
+### Versiones nuevas
+
+Una vez al día, adb-qc pregunta al registro de npm cuál es la última versión. Si hay una más nueva, te avisa al final con el comando para actualizar (`npm install -g adb-qc`). La consulta nunca hace esperar a la herramienta: si la red es lenta o no hay conexión, se omite. No se hace en CI ni cuando la salida no es una terminal. Para desactivarla, usa `ADB_QC_NO_UPDATE_CHECK=1` (o la variable común `NO_UPDATE_NOTIFIER=1`).
+
 ### Ejemplos
 
 1.  **Mostrar Código QR para Emparejamiento**:

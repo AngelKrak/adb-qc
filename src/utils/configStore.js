@@ -84,4 +84,28 @@ function saveDeviceModel(keys, model) {
   writeConfig({ ...config, models });
 }
 
-module.exports = { getLastDevice, saveLastDevice, getSavedDevices, getDeviceModels, saveDeviceModel };
+/**
+ * Returns the last answer of the npm registry about the latest version.
+ * @returns {{checkedAt: number, latest: string}|null}
+ */
+function getUpdateCheck() {
+  return readConfig().updateCheck || null;
+}
+
+/**
+ * Saves the answer of the npm registry about the latest version.
+ * @param {{checkedAt: number, latest: string}} updateCheck - When it was checked and the version found.
+ */
+function saveUpdateCheck(updateCheck) {
+  writeConfig({ ...readConfig(), updateCheck });
+}
+
+module.exports = {
+  getLastDevice,
+  saveLastDevice,
+  getSavedDevices,
+  getDeviceModels,
+  saveDeviceModel,
+  getUpdateCheck,
+  saveUpdateCheck,
+};

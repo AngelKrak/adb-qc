@@ -22,6 +22,7 @@ src/
   cli/            Terminal I/O only: prompts.js (questions) and output.js (banner, help, version).
   connection/     Connecting to a phone without duplicates and remembering it.
   discovery/      Finding phones: mDNS services, port search and the connect list (pure logic).
+  update/         Checking npm once a day for a newer adb-qc.
   utils/          adb commands, port scanner, config file, QR code and small helpers.
   i18n/           English and Spanish messages.
   types.js        Shared JSDoc types (Device).

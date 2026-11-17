@@ -2,8 +2,13 @@ const { checkAdb } = require('./utils/adbUtils');
 const { pairWithQr, pairWithCode } = require('./flows/pairing');
 const { connectDevice } = require('./flows/connecting');
 const { chooseAction } = require('./cli/prompts');
-const { printBanner, printVersion, printHelp } = require('./cli/output');
+const { printBanner, printVersion, printHelp, printUpdateNotice } = require('./cli/output');
+const { findNewerVersion } = require('./update/updateCheck');
+const { wait } = require('./utils/async');
 const { t } = require('./i18n');
+
+// How long to wait for the npm registry once the action is done, so a slow network never holds the exit.
+const UPDATE_NOTICE_WAIT_MS = 1500;
 
 /**
  * Command line flags of each action.
@@ -42,17 +47,34 @@ function parseAction(args) {
 
 /**
  * Runs adb-qc: the action given as a flag or, without flags, the one chosen in the menu.
+ * Afterwards, tells the user if a newer version is published on npm.
  * @param {string[]} [args] - The command line arguments.
  * @returns {Promise<void>}
  */
 async function main(args = process.argv.slice(2)) {
   const action = parseAction(args);
-
-  if (action === 'version') return printVersion();
   if (action === 'help') return printHelp();
 
-  printBanner();
+  // Started first so the registry answers while the user pairs or connects.
+  const newerVersion = findNewerVersion();
 
+  if (action === 'version') {
+    await printVersion();
+  } else {
+    printBanner();
+    await runAction(action);
+  }
+
+  const latest = await Promise.race([newerVersion, wait(UPDATE_NOTICE_WAIT_MS).then(() => null)]);
+  if (latest) printUpdateNotice(latest);
+}
+
+/**
+ * Checks adb and runs the action, or the one chosen in the menu. Errors are printed, not thrown.
+ * @param {string|null} action - The action from the command line.
+ * @returns {Promise<void>}
+ */
+async function runAction(action) {
   try {
     await checkAdb();
     const run = ACTIONS[action || await chooseAction()];

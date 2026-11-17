@@ -45,6 +45,8 @@ const messages = {
     menuPairConnect: '🔑 Pair and connect device with pairing code',
     menuConnect: '🔌 Connect to a device',
     cancelled: 'Cancelled.',
+    updateAvailable: '⬆️  A new version of adb-qc is available: {current} → {latest}',
+    updateCommand: '   Update with: npm install -g adb-qc',
     help: `
 Usage: adb-qc [option]
 
@@ -59,6 +61,7 @@ Options:
 
 Without options, an interactive menu is shown.
 Set ADB_QC_LANG=en or ADB_QC_LANG=es to change the language.
+Set ADB_QC_NO_UPDATE_CHECK=1 to stop checking npm for new versions.
 `,
   },
   es: {
@@ -107,6 +110,8 @@ Set ADB_QC_LANG=en or ADB_QC_LANG=es to change the language.
     menuPairConnect: '🔑 Emparejar y conectar dispositivo con código de vinculación',
     menuConnect: '🔌 Conectar a un dispositivo',
     cancelled: 'Cancelado.',
+    updateAvailable: '⬆️  Hay una nueva versión de adb-qc disponible: {current} → {latest}',
+    updateCommand: '   Actualiza con: npm install -g adb-qc',
     help: `
 Uso: adb-qc [opción]
 
@@ -121,6 +126,7 @@ Opciones:
 
 Sin opciones, se muestra un menú interactivo.
 Usa ADB_QC_LANG=en o ADB_QC_LANG=es para cambiar el idioma.
+Usa ADB_QC_NO_UPDATE_CHECK=1 para no buscar versiones nuevas en npm.
 `,
   },
 };
